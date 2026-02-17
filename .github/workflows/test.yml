@@ -27,6 +27,11 @@ jobs:
     - name: Setup database
       run: python scripts/setup_database.py
 
+    - name: Setup Google credentials
+      env:
+        GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+      run: echo "$GOOGLE_CREDENTIALS_JSON" > google-credentials.json
+
     - name: Run vendor isolation tests with Google Sheets reporting
       env:
         GOOGLE_SHEETS_ID: ${{ secrets.GOOGLE_SHEETS_ID }}
