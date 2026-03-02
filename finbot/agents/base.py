@@ -484,7 +484,7 @@ class BaseAgent(ABC):
 
     # MCP integration -- opt-in by overriding _get_mcp_servers()
 
-    def _get_mcp_servers(self) -> dict[str, FastMCP | str]:
+    async def _get_mcp_servers(self) -> dict[str, FastMCP | str]:
         """Return MCP servers this agent should connect to.
 
         Override in subclasses to opt-in to MCP. Keys are server names used for
@@ -497,7 +497,7 @@ class BaseAgent(ABC):
 
     async def _connect_mcp_servers(self) -> None:
         """Connect to MCP servers if the agent has any configured."""
-        servers = self._get_mcp_servers()
+        servers = await self._get_mcp_servers()
         if not servers:
             return
 

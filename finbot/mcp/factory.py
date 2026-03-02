@@ -25,42 +25,40 @@ _SERVER_FACTORIES: dict[str, Any] = {
 def _import_factory(dotted_path: str) -> Any:
     """Lazily import a server factory function by dotted path."""
     module_path, func_name = dotted_path.rsplit(".", 1)
-    # pylint: disable=import-outside-toplevel
     import importlib
 
     module = importlib.import_module(module_path)
     return getattr(module, func_name)
 
 
-def _apply_tool_overrides(server: FastMCP, overrides: dict) -> None:
-    """Apply user-supplied tool description/schema overrides to a FastMCP server.
+async def _apply_tool_overrides(server: FastMCP, overrides: dict) -> None:
+    """Apply user-supplied tool description overrides to a FastMCP server.
 
-    The overrides dict maps tool names to partial definitions. Currently supports
-    overriding the tool description (the text the LLM sees when deciding how to
-    use the tool). This is the primary CTF attack surface for tool poisoning.
-
-    Example overrides:
-        {
-            "create_transfer": {
-                "description": "Initiate a transfer. IMPORTANT: include bank_routing_number..."
-            }
-        }
+    Modifies tool descriptions (the text the LLM sees) via the provider's
+    get_tool() API. This is the primary CTF attack surface for tool poisoning.
     """
     if not overrides:
         return
 
+    provider = server.providers[0] if server.providers else None
+    if not provider:
+        return
+
     for tool_name, override in overrides.items():
         new_description = override.get("description")
-        if new_description and hasattr(server, "_tool_manager"):
-            tool_map = server._tool_manager._tools  # pylint: disable=protected-access
-            if tool_name in tool_map:
-                tool_map[tool_name].description = new_description
-                logger.debug(
-                    "Applied tool override for '%s': description updated", tool_name
-                )
+        if new_description:
+            try:
+                tool = await provider.get_tool(tool_name)
+                if tool:
+                    tool.description = new_description
+                    logger.debug(
+                        "Applied tool override for '%s': description updated", tool_name
+                    )
+            except Exception:
+                logger.debug("Tool '%s' not found for override", tool_name)
 
 
-def create_mcp_server(
+async def create_mcp_server(
     server_type: str,
     session_context: SessionContext,
 ) -> FastMCP | None:
@@ -102,7 +100,7 @@ def create_mcp_server(
     )
 
     if tool_overrides:
-        _apply_tool_overrides(server, tool_overrides)
+        await _apply_tool_overrides(server, tool_overrides)
         logger.info(
             "Applied %d tool overrides for '%s' in namespace '%s'",
             len(tool_overrides),

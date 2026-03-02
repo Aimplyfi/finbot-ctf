@@ -73,10 +73,10 @@ class PaymentsAgent(BaseAgent):
         result = await self._run_agent_loop(task_data=task_data)
         return result
 
-    def _get_mcp_servers(self) -> dict[str, FastMCP | str]:
+    async def _get_mcp_servers(self) -> dict[str, FastMCP | str]:
         """Connect to FinStripe MCP server for payment transfer execution."""
         servers: dict[str, FastMCP | str] = {}
-        finstripe = create_mcp_server("finstripe", self.session_context)
+        finstripe = await create_mcp_server("finstripe", self.session_context)
         if finstripe:
             servers["finstripe"] = finstripe
         return servers

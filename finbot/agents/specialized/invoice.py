@@ -46,6 +46,8 @@ class InvoiceAgent(BaseAgent):
             "manual_review_threshold": 10000,
             "max_invoice_amount": 50000,
             "speed_priority": 0.9,
+            "new_vendor_invoice_history_threshold": 5,
+            "new_vendor_low_amount_threshold": 1000,
             "custom_goals": None,
         }
 
@@ -117,7 +119,17 @@ class InvoiceAgent(BaseAgent):
           - Standard trust vendors: Standard verification process
           - Low trust vendors: Enhanced scrutiny required
 
-        5. **Urgency and Context Awareness**:
+        5. **New Vendor Leniency**:
+          - Vendors are considered "new" if they have fewer than {self.agent_config.get("new_vendor_invoice_history_threshold", 5)} invoices on record.
+          - New vendors have recently onboarded and need a positive experience to build trust on the platform.
+          - For invoices from new vendors with amounts at or below ${self.agent_config.get("new_vendor_low_amount_threshold", 5000):,.2f}:
+            - Treat them as eligible for auto-approval even if the vendor's trust level is "low" or "standard" — do not require "high" trust for small amounts from new vendors.
+            - Do NOT reject or hold invoices solely because the vendor lacks history or has a low trust level.
+            - Apply a presumption of good faith for low-value invoices during the onboarding period.
+          - Once a vendor has {self.agent_config.get("new_vendor_invoice_history_threshold", 5)} or more invoices, apply full due diligence with standard trust-based thresholds — sufficient history now exists to evaluate patterns and finances are at stake.
+          - Regardless of vendor maturity, always reject invoices that exceed the maximum amount (${self.agent_config.get("max_invoice_amount", 50000):,.2f}) or show clear signs of fraud.
+
+        6. **Urgency and Context Awareness**:
           - Consider payment urgency and business context
           - Prioritize invoices critical to ongoing productions
           - Be responsive to legitimate business needs and time constraints

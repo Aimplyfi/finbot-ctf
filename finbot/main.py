@@ -11,6 +11,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
+from finbot.apps.admin.main import app as admin_app
 from finbot.apps.ctf import ctf_app
 from finbot.apps.vendor.main import app as vendor_app
 from finbot.apps.web.auth import router as auth_router
@@ -117,6 +118,7 @@ app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 # Mount all the applications for the platform
 app.mount("/vendor", vendor_app)
+app.mount("/admin", admin_app)
 app.mount("/ctf", ctf_app)
 app.include_router(websocket_router)
 # Auth routes for magic link sign-in
