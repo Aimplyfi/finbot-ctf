@@ -113,28 +113,25 @@ def create_vendor(vendor_repo, company_name: str, contact_name: str, email: str,
 @pytest.fixture
 def vendor_pair_setup(db):
     """Create two test vendors with sessions for isolation testing.
-    
+
     Returns dict with:
         - s1, s2: Two sessions for same user email
         - v1, v2: Two vendors created in same namespace
         - db: Database session
     """
-    # Create two sessions for the same user (same namespace/user_id)
     s1 = session_manager.create_session(email="isolation_test@example.com")
     s2 = session_manager.create_session(email="isolation_test@example.com")
-    
-    # Create vendors
+
     vendor_repo = VendorRepository(db, s1)
     v1 = create_vendor(vendor_repo, "Vendor Alpha", "Alice Smith", "alice@vendor1.com", "11-1111111")
     v2 = create_vendor(vendor_repo, "Vendor Beta", "Bob Johnson", "bob@vendor2.com", "22-2222222")
-    
-    # Attach vendor contexts to sessions
+
     us1 = db.query(UserSession).filter(UserSession.session_id == s1.session_id).first()
     us2 = db.query(UserSession).filter(UserSession.session_id == s2.session_id).first()
     us1.current_vendor_id = v1.id
     us2.current_vendor_id = v2.id
     db.commit()
-    
+
     return {
         's1': s1,
         's2': s2,
@@ -147,7 +144,7 @@ def vendor_pair_setup(db):
 @pytest.fixture
 def multi_vendor_setup(db):
     """Create multiple test vendors for load/concurrency testing.
-    
+
     Returns dict with:
         - vendors: List of vendor dicts with session_id, vendor_id, invoice_id
         - db: Database session
