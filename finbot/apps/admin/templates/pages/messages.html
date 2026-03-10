@@ -10,6 +10,12 @@
 {% block page_subtitle %}Admin messages and notifications{% endblock %}
 
 {% block header_actions %}
+<button id="compose-btn" onclick="openCompose()" class="px-4 py-2 text-sm font-medium rounded-lg bg-admin-primary text-portal-bg-primary hover:bg-admin-secondary transition-colors inline-flex items-center gap-2">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+    </svg>
+    Compose
+</button>
 <button id="mark-all-read-btn" class="px-4 py-2 text-sm font-medium rounded-lg border border-admin-primary/30 text-admin-primary hover:bg-admin-primary/10 transition-colors inline-flex items-center gap-2">
     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
@@ -80,6 +86,7 @@
             <button class="inbox-filter-btn" data-filter="payment_confirmation">Confirmed</button>
             <button class="inbox-filter-btn" data-filter="compliance_alert">Compliance</button>
             <button class="inbox-filter-btn" data-filter="action_required">Action</button>
+            <button class="inbox-filter-btn" data-filter="sent">Sent</button>
         </div>
         <div class="text-sm text-text-secondary">
             <span id="inbox-showing">0 messages</span>
@@ -177,8 +184,63 @@
                 <!-- Body -->
                 <div class="reading-pane-body">
                     <div id="detail-body" class="prose-message"></div>
+
+                    <!-- Reply actions -->
+                    <div class="flex items-center gap-2 mt-6 pt-4" style="border-top: 1px solid rgba(255,255,255,0.06);">
+                        <button onclick="replyToMessage()" class="px-4 py-2 text-xs font-medium rounded-lg border border-white/10 text-text-secondary hover:text-text-bright hover:bg-white/5 transition-colors inline-flex items-center gap-1.5">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/></svg>
+                            Reply
+                        </button>
+                        <button onclick="replyAllToMessage()" class="px-4 py-2 text-xs font-medium rounded-lg border border-white/10 text-text-secondary hover:text-text-bright hover:bg-white/5 transition-colors inline-flex items-center gap-1.5">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/></svg>
+                            Reply All
+                        </button>
+                    </div>
                 </div>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Compose Modal -->
+<div id="compose-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);">
+    <div class="w-full max-w-2xl mx-4 rounded-2xl overflow-hidden" style="background: #151520; border: 1px solid rgba(245,158,11,0.2);">
+        <div class="flex items-center justify-between px-6 py-4" style="border-bottom: 1px solid rgba(245,158,11,0.1);">
+            <h3 class="text-lg font-semibold text-text-bright">New Email</h3>
+            <button onclick="closeCompose()" class="p-1.5 rounded-lg text-text-secondary hover:text-text-bright hover:bg-white/5 transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+        </div>
+        <div class="px-6 py-4 space-y-3">
+            <div>
+                <label class="block text-xs font-medium text-text-secondary mb-1">To</label>
+                <input id="compose-to" type="text" placeholder="recipient@example.com" class="w-full bg-portal-bg-primary border border-white/10 rounded-lg px-3 py-2 text-sm text-text-bright placeholder-text-secondary/50 focus:outline-none focus:border-admin-primary/50">
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs font-medium text-text-secondary mb-1">CC <span class="text-text-secondary/50">(optional)</span></label>
+                    <input id="compose-cc" type="text" placeholder="cc@example.com" class="w-full bg-portal-bg-primary border border-white/10 rounded-lg px-3 py-2 text-sm text-text-bright placeholder-text-secondary/50 focus:outline-none focus:border-admin-primary/50">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-text-secondary mb-1">BCC <span class="text-text-secondary/50">(optional)</span></label>
+                    <input id="compose-bcc" type="text" placeholder="bcc@example.com" class="w-full bg-portal-bg-primary border border-white/10 rounded-lg px-3 py-2 text-sm text-text-bright placeholder-text-secondary/50 focus:outline-none focus:border-admin-primary/50">
+                </div>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-text-secondary mb-1">Subject</label>
+                <input id="compose-subject" type="text" placeholder="Email subject" class="w-full bg-portal-bg-primary border border-white/10 rounded-lg px-3 py-2 text-sm text-text-bright placeholder-text-secondary/50 focus:outline-none focus:border-admin-primary/50">
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-text-secondary mb-1">Message</label>
+                <textarea id="compose-body" rows="8" placeholder="Write your message..." class="w-full bg-portal-bg-primary border border-white/10 rounded-lg px-3 py-2 text-sm text-text-bright placeholder-text-secondary/50 focus:outline-none focus:border-admin-primary/50 resize-none"></textarea>
+            </div>
+        </div>
+        <div class="flex items-center justify-end gap-3 px-6 py-4" style="border-top: 1px solid rgba(245,158,11,0.1);">
+            <button onclick="closeCompose()" class="px-4 py-2 text-sm rounded-lg border border-white/10 text-text-secondary hover:text-text-bright hover:bg-white/5 transition-colors">Cancel</button>
+            <button id="compose-send-btn" onclick="sendComposedEmail()" class="px-6 py-2 text-sm font-medium rounded-lg bg-admin-primary text-portal-bg-primary hover:bg-admin-secondary transition-colors inline-flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+                Send
+            </button>
         </div>
     </div>
 </div>

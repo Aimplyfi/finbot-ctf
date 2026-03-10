@@ -22,6 +22,7 @@ class EmailRepository(NamespacedRepository):
         direction: str = "outbound",
         channel: str = "email",
         sender_type: str = "agent",
+        from_address: str | None = None,
         related_invoice_id: int | None = None,
         workflow_id: str | None = None,
         metadata_json: str | None = None,
@@ -42,6 +43,7 @@ class EmailRepository(NamespacedRepository):
             body=body,
             sender_name=sender_name,
             sender_type=sender_type,
+            from_address=from_address,
             related_invoice_id=related_invoice_id,
             workflow_id=workflow_id,
             metadata_json=metadata_json,
@@ -180,6 +182,23 @@ class EmailRepository(NamespacedRepository):
         )
         self.db.commit()
         return count
+
+    # -- Sent emails (by from_address) --
+
+    def list_sent_emails(
+        self,
+        from_address: str,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[Email]:
+        return (
+            self._add_namespace_filter(self.db.query(Email), Email)
+            .filter(Email.from_address == from_address)
+            .order_by(Email.created_at.desc(), Email.id.desc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
 
     # -- Shared operations --
 

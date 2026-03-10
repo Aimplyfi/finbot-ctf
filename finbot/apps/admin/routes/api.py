@@ -13,6 +13,7 @@ from finbot.core.data.database import get_db
 from finbot.core.data.repositories import (
     MCPActivityLogRepository,
     MCPServerConfigRepository,
+    VendorRepository,
 )
 from finbot.mcp.servers.findrive.server import DEFAULT_CONFIG as FINDRIVE_DEFAULTS
 from finbot.mcp.servers.finmail.repositories import EmailRepository
@@ -237,13 +238,24 @@ async def toggle_mcp_server(
 async def get_messages(
     message_type: str | None = None,
     is_read: bool | None = None,
+    sent: bool = False,
     limit: int = 50,
     offset: int = 0,
     session_context: SessionContext = Depends(get_session_context),
 ):
-    """Get messages for the admin inbox (namespace-scoped)."""
+    """Get messages for the admin inbox (namespace-scoped). Use sent=true to view sent emails."""
+    from finbot.mcp.servers.finmail.routing import get_admin_address  # pylint: disable=import-outside-toplevel
+
     db = next(get_db())
     repo = EmailRepository(db, session_context)
+
+    if sent:
+        from_addr = get_admin_address(session_context.namespace)
+        messages = repo.list_sent_emails(from_address=from_addr, limit=limit, offset=offset)
+        return {
+            "messages": [m.to_dict() for m in messages],
+            "stats": {"total": len(messages), "unread": 0, "by_type": {}},
+        }
 
     messages = repo.list_admin_emails(
         message_type=message_type,
@@ -267,6 +279,26 @@ async def get_message_stats(
     db = next(get_db())
     repo = EmailRepository(db, session_context)
     return repo.get_admin_email_stats()
+
+
+@router.get("/messages/contacts")
+async def get_message_contacts(
+    session_context: SessionContext = Depends(get_session_context),
+):
+    """Get addressable contacts for email compose autocomplete."""
+    from finbot.mcp.servers.finmail.routing import get_admin_address  # pylint: disable=import-outside-toplevel
+
+    db = next(get_db())
+    vendor_repo = VendorRepository(db, session_context)
+    vendors = vendor_repo.list_vendors() or []
+
+    contacts = [
+        {"email": get_admin_address(session_context.namespace), "name": "Admin", "type": "admin"},
+    ]
+    for v in vendors:
+        contacts.append({"email": v.email, "name": v.company_name, "type": "vendor"})
+
+    return {"contacts": contacts}
 
 
 @router.get("/messages/{message_id}")
@@ -312,6 +344,48 @@ async def mark_all_messages_read(
 
     count = repo.mark_all_admin_as_read()
     return {"success": True, "messages_updated": count}
+
+
+class ComposeEmailRequest(BaseModel):
+    """Compose and send an email"""
+    to: list[str]
+    subject: str
+    body: str
+    message_type: str = "general"
+    cc: list[str] | None = None
+    bcc: list[str] | None = None
+
+
+@router.post("/messages/send")
+async def send_message(
+    req: ComposeEmailRequest,
+    session_context: SessionContext = Depends(get_session_context),
+):
+    """Compose and send an email from the admin portal."""
+    from finbot.mcp.servers.finmail.routing import get_admin_address, route_and_deliver  # pylint: disable=import-outside-toplevel
+
+    sender_name = session_context.email or "Admin"
+    from_addr = get_admin_address(session_context.namespace)
+
+    db = next(get_db())
+    repo = EmailRepository(db, session_context)
+
+    result = route_and_deliver(
+        db=db,
+        repo=repo,
+        namespace=session_context.namespace,
+        to=req.to,
+        subject=req.subject,
+        body=req.body,
+        message_type=req.message_type,
+        sender_name=sender_name,
+        sender_type="admin",
+        from_address=from_addr,
+        cc=req.cc,
+        bcc=req.bcc,
+    )
+
+    return result
 
 
 # =============================================================================

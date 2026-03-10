@@ -43,6 +43,7 @@ class Email(Base):
 
     sender_name = Column[str](String(255), nullable=False)
     sender_type = Column[str](String(20), nullable=False, default="agent")
+    from_address = Column[str](String(255), nullable=True)
 
     # Email addressing (JSON arrays of email strings)
     to_addresses = Column[str](Text, nullable=True)
@@ -94,6 +95,7 @@ class Email(Base):
             "body": self.body,
             "sender_name": self.sender_name,
             "sender_type": self.sender_type,
+            "from_address": self.from_address,
             "to_addresses": self._parse_addresses(self.to_addresses),
             "cc_addresses": self._parse_addresses(self.cc_addresses),
             "bcc_addresses": self._parse_addresses(self.bcc_addresses),

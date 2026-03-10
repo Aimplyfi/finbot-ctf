@@ -7,7 +7,6 @@ The tool descriptions here are the CTF attack surface for email-based scenarios:
 admins can override them via tool_overrides_json to introduce email attack patterns.
 """
 
-import json
 import logging
 from typing import Any
 
@@ -15,8 +14,8 @@ from fastmcp import FastMCP
 
 from finbot.core.auth.session import SessionContext
 from finbot.core.data.database import get_db
-from finbot.core.data.models import User, Vendor
 from finbot.mcp.servers.finmail.repositories import EmailRepository
+from finbot.mcp.servers.finmail.routing import get_admin_address, route_and_deliver
 
 logger = logging.getLogger(__name__)
 
@@ -24,15 +23,6 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "max_results_per_query": 50,
     "default_sender": "CineFlow Productions - FinBot",
 }
-
-
-def get_admin_address(namespace: str) -> str:
-    """Derive the canonical admin address from a namespace."""
-    return f"admin@{namespace}.finbot"
-
-
-def _is_admin_address(email_addr: str, namespace: str) -> bool:
-    return email_addr == get_admin_address(namespace)
 
 
 def create_finmail_server(
@@ -73,97 +63,25 @@ def create_finmail_server(
         """
         effective_sender = sender_name or config.get("default_sender", "CineFlow Productions - FinBot")
         inv_id = related_invoice_id if related_invoice_id > 0 else None
-        namespace = session_context.namespace
 
         db = next(get_db())
         repo = EmailRepository(db, session_context)
-        to_json = json.dumps(to) if to else None
-        cc_json = json.dumps(cc) if cc else None
-        bcc_json = json.dumps(bcc) if bcc else None
 
-        deliveries: list[dict] = []
-
-        for role, addresses in [("to", to), ("cc", cc), ("bcc", bcc)]:
-            for email_addr in (addresses or []):
-                visible_bcc = bcc_json if role == "bcc" else None
-
-                # Step 1: Check vendor email (namespace-scoped)
-                vendor = (
-                    db.query(Vendor)
-                    .filter(Vendor.namespace == namespace, Vendor.email == email_addr)
-                    .first()
-                )
-                if vendor:
-                    repo.create_email(
-                        inbox_type="vendor",
-                        vendor_id=vendor.id,
-                        subject=subject,
-                        body=body,
-                        message_type=message_type,
-                        sender_name=effective_sender,
-                        sender_type="agent",
-                        channel="email",
-                        related_invoice_id=inv_id,
-                        to_addresses=to_json,
-                        cc_addresses=cc_json,
-                        bcc_addresses=visible_bcc,
-                        recipient_role=role,
-                    )
-                    deliveries.append({"type": "vendor", "vendor_id": vendor.id, "email": email_addr, "role": role})
-                    continue
-
-                # Step 2: Check canonical admin address
-                if _is_admin_address(email_addr, namespace):
-                    repo.create_email(
-                        inbox_type="admin",
-                        subject=subject,
-                        body=body,
-                        message_type=message_type,
-                        sender_name=effective_sender,
-                        sender_type="agent",
-                        channel="email",
-                        related_invoice_id=inv_id,
-                        to_addresses=to_json,
-                        cc_addresses=cc_json,
-                        bcc_addresses=visible_bcc,
-                        recipient_role=role,
-                    )
-                    deliveries.append({"type": "admin", "email": email_addr, "role": role})
-                    continue
-
-                # Step 3: Check user's real email
-                user = (
-                    db.query(User)
-                    .filter(User.namespace == namespace, User.email == email_addr)
-                    .first()
-                )
-                if user:
-                    repo.create_email(
-                        inbox_type="admin",
-                        subject=subject,
-                        body=body,
-                        message_type=message_type,
-                        sender_name=effective_sender,
-                        sender_type="agent",
-                        channel="email",
-                        related_invoice_id=inv_id,
-                        to_addresses=to_json,
-                        cc_addresses=cc_json,
-                        bcc_addresses=visible_bcc,
-                        recipient_role=role,
-                    )
-                    deliveries.append({"type": "admin", "email": email_addr, "role": role})
-                    continue
-
-                logger.warning("Unresolvable address: %s in namespace %s", email_addr, namespace)
-                deliveries.append({"type": "undeliverable", "email": email_addr, "role": role})
-
-        return {
-            "sent": True,
-            "subject": subject,
-            "deliveries": deliveries,
-            "delivery_count": len([d for d in deliveries if d["type"] != "undeliverable"]),
-        }
+        return route_and_deliver(
+            db=db,
+            repo=repo,
+            namespace=session_context.namespace,
+            to=to,
+            subject=subject,
+            body=body,
+            message_type=message_type,
+            sender_name=effective_sender,
+            sender_type="agent",
+            from_address=get_admin_address(session_context.namespace),
+            cc=cc,
+            bcc=bcc,
+            related_invoice_id=inv_id,
+        )
 
     @mcp.tool
     def list_inbox(

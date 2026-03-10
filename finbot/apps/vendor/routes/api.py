@@ -988,16 +988,28 @@ async def delete_vendor_file(
 async def get_messages(
     message_type: str | None = None,
     is_read: bool | None = None,
+    sent: bool = False,
     limit: int = 50,
     offset: int = 0,
     session_context: SessionContext = Depends(get_session_context),
 ):
-    """Get messages for current vendor"""
+    """Get messages for current vendor. Use sent=true to view sent emails."""
     if not session_context.current_vendor_id:
         raise HTTPException(status_code=400, detail="Vendor context required")
 
     db = next(get_db())
     repo = EmailRepository(db, session_context)
+
+    if sent:
+        vendor_repo = VendorRepository(db, session_context)
+        vendor_obj = vendor_repo.get_vendor(session_context.current_vendor_id)
+        from_addr = vendor_obj.email if vendor_obj else None
+        messages = repo.list_sent_emails(from_address=from_addr, limit=limit, offset=offset) if from_addr else []
+        return {
+            "messages": [m.to_dict() for m in messages],
+            "stats": {"total": len(messages), "unread": 0, "by_type": {}},
+            "vendor_context": session_context.current_vendor,
+        }
 
     messages = repo.list_vendor_emails(
         vendor_id=session_context.current_vendor_id,
@@ -1026,6 +1038,26 @@ async def get_message_stats(
     db = next(get_db())
     repo = EmailRepository(db, session_context)
     return repo.get_vendor_email_stats(session_context.current_vendor_id)
+
+
+@router.get("/messages/contacts")
+async def get_message_contacts(
+    session_context: SessionContext = Depends(get_session_context),
+):
+    """Get addressable contacts for email compose autocomplete."""
+    from finbot.mcp.servers.finmail.routing import get_admin_address  # pylint: disable=import-outside-toplevel
+
+    db = next(get_db())
+    vendor_repo = VendorRepository(db, session_context)
+    vendors = vendor_repo.list_vendors() or []
+
+    contacts = [
+        {"email": get_admin_address(session_context.namespace), "name": "Admin", "type": "admin"},
+    ]
+    for v in vendors:
+        contacts.append({"email": v.email, "name": v.company_name, "type": "vendor"})
+
+    return {"contacts": contacts}
 
 
 @router.get("/messages/{message_id}")
@@ -1079,6 +1111,53 @@ async def mark_all_messages_read(
     repo = EmailRepository(db, session_context)
     count = repo.mark_all_vendor_as_read(session_context.current_vendor_id)
     return {"success": True, "messages_updated": count}
+
+
+class ComposeEmailRequest(BaseModel):
+    """Compose and send an email"""
+    to: list[str]
+    subject: str
+    body: str
+    message_type: str = "general"
+    cc: list[str] | None = None
+    bcc: list[str] | None = None
+
+
+@router.post("/messages/send")
+async def send_message(
+    req: ComposeEmailRequest,
+    session_context: SessionContext = Depends(get_session_context),
+):
+    """Compose and send an email from the vendor portal."""
+    if not session_context.current_vendor_id:
+        raise HTTPException(status_code=400, detail="Vendor context required")
+
+    from finbot.mcp.servers.finmail.routing import route_and_deliver  # pylint: disable=import-outside-toplevel
+
+    db = next(get_db())
+    vendor_repo = VendorRepository(db, session_context)
+    vendor_obj = vendor_repo.get_vendor(session_context.current_vendor_id)
+    sender_name = vendor_obj.company_name if vendor_obj else "Vendor"
+    from_addr = vendor_obj.email if vendor_obj else None
+
+    repo = EmailRepository(db, session_context)
+
+    result = route_and_deliver(
+        db=db,
+        repo=repo,
+        namespace=session_context.namespace,
+        to=req.to,
+        subject=req.subject,
+        body=req.body,
+        message_type=req.message_type,
+        sender_name=sender_name,
+        sender_type="vendor",
+        from_address=from_addr,
+        cc=req.cc,
+        bcc=req.bcc,
+    )
+
+    return result
 
 
 # =============================================================================

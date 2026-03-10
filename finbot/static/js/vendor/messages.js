@@ -36,16 +36,22 @@ ready(function () {
 
 async function initializeInbox() {
     bindToolbarEvents();
-    await loadMessages();
+    await Promise.all([loadMessages(), loadContacts()]);
+    initAutocomplete();
 }
 
 function bindToolbarEvents() {
     document.querySelectorAll('.inbox-filter-btn').forEach(btn => {
         btn.addEventListener('click', () => {
+            const prev = InboxState.activeFilter;
             document.querySelectorAll('.inbox-filter-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             InboxState.activeFilter = btn.dataset.filter;
-            renderMessageList();
+            if (btn.dataset.filter === 'sent' || prev === 'sent') {
+                loadMessages();
+            } else {
+                renderMessageList();
+            }
         });
     });
 
@@ -64,7 +70,9 @@ async function loadMessages() {
     showLoading(true);
 
     try {
-        const resp = await api.get('/vendor/api/v1/messages');
+        const isSent = InboxState.activeFilter === 'sent';
+        const url = isSent ? '/vendor/api/v1/messages?sent=true' : '/vendor/api/v1/messages';
+        const resp = await api.get(url);
         const data = resp.data || resp;
         InboxState.messages = data.messages || [];
         InboxState.stats = data.stats || {};
@@ -93,7 +101,7 @@ function updateStats() {
 
 function getFilteredMessages() {
     const filter = InboxState.activeFilter;
-    if (filter === 'all') return InboxState.messages;
+    if (filter === 'all' || filter === 'sent') return InboxState.messages;
     if (filter === 'unread') return InboxState.messages.filter(m => !m.is_read);
     return InboxState.messages.filter(m => m.message_type === filter);
 }
@@ -299,6 +307,173 @@ function renderAddressFields(msg) {
     }
 
     container.classList.toggle('hidden', !hasAny);
+}
+
+// ===== Compose =====
+
+let _contacts = [];
+
+async function loadContacts() {
+    try {
+        const resp = await api.get('/vendor/api/v1/messages/contacts');
+        _contacts = (resp.data || resp).contacts || [];
+    } catch (e) {
+        _contacts = [];
+    }
+}
+
+function openCompose(prefill) {
+    const modal = document.getElementById('compose-modal');
+    modal?.classList.remove('hidden');
+
+    if (prefill) {
+        if (prefill.to) document.getElementById('compose-to').value = prefill.to;
+        if (prefill.cc) document.getElementById('compose-cc').value = prefill.cc;
+        if (prefill.subject) document.getElementById('compose-subject').value = prefill.subject;
+        if (prefill.body) document.getElementById('compose-body').value = prefill.body;
+    }
+
+    const focusField = prefill?.body ? 'compose-body' : 'compose-to';
+    document.getElementById(focusField)?.focus();
+}
+
+function closeCompose() {
+    document.getElementById('compose-modal')?.classList.add('hidden');
+    ['compose-to', 'compose-cc', 'compose-bcc', 'compose-subject', 'compose-body'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+    document.getElementById('autocomplete-list')?.remove();
+}
+
+function _getSelectedMessage() {
+    if (!InboxState.selectedId) return null;
+    return InboxState.messages.find(m => m.id === InboxState.selectedId) || null;
+}
+
+function _quoteBody(msg) {
+    const date = formatMessageDate(msg.created_at);
+    const sender = msg.sender_name || 'Unknown';
+    return `\n\n--- On ${date}, ${sender} wrote ---\n${msg.body || ''}`;
+}
+
+function replyToMessage() {
+    const msg = _getSelectedMessage();
+    if (!msg) return;
+
+    const replyTo = msg.from_address || msg.sender_name || '';
+
+    openCompose({
+        to: replyTo,
+        subject: msg.subject?.startsWith('Re: ') ? msg.subject : `Re: ${msg.subject}`,
+        body: _quoteBody(msg),
+    });
+}
+
+function replyAllToMessage() {
+    const msg = _getSelectedMessage();
+    if (!msg) return;
+
+    const replyTo = msg.from_address || msg.sender_name || '';
+    const others = [...(msg.to_addresses || []), ...(msg.cc_addresses || [])];
+    const cc = others.filter(addr => addr !== replyTo);
+
+    openCompose({
+        to: replyTo,
+        cc: cc.join(', '),
+        subject: msg.subject?.startsWith('Re: ') ? msg.subject : `Re: ${msg.subject}`,
+        body: _quoteBody(msg),
+    });
+}
+
+function parseAddresses(value) {
+    if (!value || !value.trim()) return null;
+    return value.split(',').map(s => s.trim()).filter(Boolean);
+}
+
+async function sendComposedEmail() {
+    const to = parseAddresses(document.getElementById('compose-to')?.value);
+    const subject = document.getElementById('compose-subject')?.value?.trim();
+    const body = document.getElementById('compose-body')?.value?.trim();
+
+    if (!to || to.length === 0) return showNotification('To address is required', 'error');
+    if (!subject) return showNotification('Subject is required', 'error');
+    if (!body) return showNotification('Message body is required', 'error');
+
+    const payload = {
+        to,
+        subject,
+        body,
+        message_type: 'general',
+        cc: parseAddresses(document.getElementById('compose-cc')?.value),
+        bcc: parseAddresses(document.getElementById('compose-bcc')?.value),
+    };
+
+    try {
+        const resp = await api.post('/vendor/api/v1/messages/send', payload);
+        const data = resp.data || resp;
+        closeCompose();
+        showNotification(`Email sent (${data.delivery_count || 0} delivered)`, 'success');
+        await loadMessages();
+    } catch (err) {
+        console.error('Failed to send email:', err);
+        showNotification('Failed to send email', 'error');
+    }
+}
+
+// ===== Autocomplete =====
+
+function setupAutocomplete(inputId) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+
+    input.addEventListener('input', function () {
+        const val = this.value;
+        const lastComma = val.lastIndexOf(',');
+        const current = (lastComma >= 0 ? val.substring(lastComma + 1) : val).trim().toLowerCase();
+
+        document.getElementById('autocomplete-list')?.remove();
+        if (current.length < 1) return;
+
+        const matches = _contacts.filter(c =>
+            c.email.toLowerCase().includes(current) || c.name.toLowerCase().includes(current)
+        ).slice(0, 6);
+
+        if (matches.length === 0) return;
+
+        const list = document.createElement('div');
+        list.id = 'autocomplete-list';
+        list.style.cssText = 'position:absolute;z-index:100;background:#1a1a2e;border:1px solid rgba(255,255,255,0.1);border-radius:8px;max-height:180px;overflow-y:auto;width:100%;margin-top:2px;';
+
+        matches.forEach(c => {
+            const item = document.createElement('div');
+            item.style.cssText = 'padding:8px 12px;cursor:pointer;font-size:0.8rem;color:#e2e8f0;display:flex;justify-content:space-between;align-items:center;';
+            item.innerHTML = `<span>${escapeHtml(c.name)}</span><span style="color:#94a3b8;font-size:0.7rem;">${escapeHtml(c.email)}</span>`;
+
+            item.addEventListener('mouseenter', () => item.style.background = 'rgba(255,255,255,0.05)');
+            item.addEventListener('mouseleave', () => item.style.background = 'transparent');
+            item.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                const prefix = lastComma >= 0 ? val.substring(0, lastComma + 1) + ' ' : '';
+                input.value = prefix + c.email;
+                list.remove();
+                input.focus();
+            });
+
+            list.appendChild(item);
+        });
+
+        input.parentElement.style.position = 'relative';
+        input.parentElement.appendChild(list);
+    });
+
+    input.addEventListener('blur', () => {
+        setTimeout(() => document.getElementById('autocomplete-list')?.remove(), 200);
+    });
+}
+
+function initAutocomplete() {
+    ['compose-to', 'compose-cc', 'compose-bcc'].forEach(setupAutocomplete);
 }
 
 // ===== Helpers =====

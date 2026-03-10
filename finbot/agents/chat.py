@@ -122,7 +122,7 @@ class ChatAssistant:
         self._mcp_connected = True
 
     def _get_system_prompt(self) -> str:
-        from finbot.mcp.servers.finmail.server import get_admin_address  # pylint: disable=import-outside-toplevel
+        from finbot.mcp.servers.finmail.routing import get_admin_address  # pylint: disable=import-outside-toplevel
 
         admin_addr = get_admin_address(self.session_context.namespace)
         return f"""You are FinBot, the AI assistant for CineFlow Productions' vendor portal.

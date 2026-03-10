@@ -15,7 +15,7 @@ from finbot.agents.base import BaseAgent
 from finbot.agents.utils import agent_tool
 from finbot.core.auth.session import SessionContext
 from finbot.mcp.factory import create_mcp_server
-from finbot.mcp.servers.finmail.server import get_admin_address
+from finbot.mcp.servers.finmail.routing import get_admin_address
 from finbot.tools import (
     get_invoice_details,
     get_vendor_contact_info,
