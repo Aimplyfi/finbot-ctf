@@ -31,6 +31,28 @@ async def get_vendor_details(
     return vendor.to_dict()
 
 
+async def get_vendor_contact_info(
+    vendor_id: int,
+    session_context: SessionContext,
+) -> dict[str, Any]:
+    """Get vendor contact information for communication purposes"""
+    logger.info("Getting vendor contact info for vendor_id: %s", vendor_id)
+    db = next(get_db())
+    vendor_repo = VendorRepository(db, session_context)
+    vendor = vendor_repo.get_vendor(vendor_id)
+    if not vendor:
+        raise ValueError("Vendor not found")
+
+    return {
+        "vendor_id": vendor.id,
+        "company_name": vendor.company_name,
+        "contact_name": vendor.contact_name,
+        "email": vendor.email,
+        "phone": vendor.phone,
+        "status": vendor.status,
+    }
+
+
 async def update_vendor_status(
     vendor_id: int,
     status: str,

@@ -265,7 +265,7 @@ class OrchestratorAgent(BaseAgent):
                 "type": "function",
                 "name": "delegate_to_communication",
                 "strict": True,
-                "description": "Delegate a task to the Communication Agent. Use for sending notifications to vendors about decisions, status updates, payment confirmations, compliance alerts, or any information the vendor should know.",
+                "description": "Delegate a task to the Communication Agent. Use for sending notifications to vendors about decisions, status updates, payment confirmations, compliance alerts, or any information the vendor or admin should know. Supports optional To/CC/BCC addressing hints.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -290,11 +290,29 @@ class OrchestratorAgent(BaseAgent):
                                 "general",
                             ],
                         },
+                        "to_addresses": {
+                            "type": ["array", "null"],
+                            "items": {"type": "string"},
+                            "description": "Optional To: email addresses. If null, the Communication Agent decides based on context.",
+                        },
+                        "cc_addresses": {
+                            "type": ["array", "null"],
+                            "items": {"type": "string"},
+                            "description": "Optional CC: email addresses to copy on the notification.",
+                        },
+                        "bcc_addresses": {
+                            "type": ["array", "null"],
+                            "items": {"type": "string"},
+                            "description": "Optional BCC: email addresses for blind copies.",
+                        },
                     },
                     "required": [
                         "vendor_id",
                         "task_description",
                         "notification_type",
+                        "to_addresses",
+                        "cc_addresses",
+                        "bcc_addresses",
                     ],
                     "additionalProperties": False,
                 },
@@ -437,6 +455,9 @@ class OrchestratorAgent(BaseAgent):
         vendor_id: int,
         task_description: str,
         notification_type: str,
+        to_addresses: list[str] | None = None,
+        cc_addresses: list[str] | None = None,
+        bcc_addresses: list[str] | None = None,
     ) -> dict[str, Any]:
         """Delegate to the Communication Agent."""
         if cap_result := self._check_delegation_limit("communication"):
@@ -449,12 +470,20 @@ class OrchestratorAgent(BaseAgent):
         # pylint: disable=import-outside-toplevel
         from finbot.agents.runner import run_communication_agent
 
+        task_data: dict[str, Any] = {
+            "vendor_id": vendor_id,
+            "notification_type": notification_type,
+            "description": task_description,
+        }
+        if to_addresses:
+            task_data["to_addresses"] = to_addresses
+        if cc_addresses:
+            task_data["cc_addresses"] = cc_addresses
+        if bcc_addresses:
+            task_data["bcc_addresses"] = bcc_addresses
+
         result = await run_communication_agent(
-            task_data={
-                "vendor_id": vendor_id,
-                "notification_type": notification_type,
-                "description": task_description,
-            },
+            task_data=task_data,
             session_context=self.session_context,
             workflow_id=self.workflow_id,
         )

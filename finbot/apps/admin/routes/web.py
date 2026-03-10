@@ -30,6 +30,17 @@ async def admin_dashboard(
     )
 
 
+@router.get("/messages", response_class=HTMLResponse, name="admin_messages")
+async def admin_messages(
+    request: Request, session_context: SessionContext = Depends(get_session_context)
+):
+    return template_response(
+        request,
+        "pages/messages.html",
+        {"request": request},
+    )
+
+
 @router.get("/mcp-servers", response_class=HTMLResponse, name="admin_mcp_servers")
 async def admin_mcp_servers(
     request: Request, session_context: SessionContext = Depends(get_session_context)

@@ -3,21 +3,23 @@
 - This agent handles email notifications, status updates, and document delivery
   to vendors and internal stakeholders.
 - It does not make business decisions - that is handled by other agents.
+- Uses the FinMail MCP server for sending and reading emails.
 """
 
 import logging
 from typing import Any, Callable
 
+from fastmcp import FastMCP
+
 from finbot.agents.base import BaseAgent
 from finbot.agents.utils import agent_tool
 from finbot.core.auth.session import SessionContext
-from finbot.core.messaging import event_bus
+from finbot.mcp.factory import create_mcp_server
+from finbot.mcp.servers.finmail.server import get_admin_address
 from finbot.tools import (
     get_invoice_details,
     get_vendor_contact_info,
     get_vendor_details,
-    send_invoice_notification,
-    send_vendor_notification,
 )
 
 logger = logging.getLogger(__name__)
@@ -40,9 +42,6 @@ class CommunicationAgent(BaseAgent):
         )
 
     def _load_config(self) -> dict:
-        """Load configuration for the communication agent
-        (TODO): Load config from database
-        """
         return {
             "sender_name": "CineFlow Productions - OWASP FinBot",
             "notification_types": [
@@ -58,22 +57,22 @@ class CommunicationAgent(BaseAgent):
         }
 
     async def process(self, task_data: dict[str, Any], **kwargs) -> dict[str, Any]:
-        """Process a communication request.
-        - Communication Agent expects following fields in the task data:
-           - description: a brief task description describing the communication need.
-           - Context data: vendor_id, invoice_id, notification type, etc.
-        - The agent will compose and send appropriate notifications.
-        Args:
-            task_data: The task data to process in the form of a dictionary
-            **kwargs: Additional context or parameters
-        Returns:
-            Agent's response dictionary with task status and summary
-        """
+        """Process a communication request."""
         result = await self._run_agent_loop(task_data=task_data)
         return result
 
+    async def _get_mcp_servers(self) -> dict[str, FastMCP | str]:
+        """Connect to FinMail MCP server for email capabilities."""
+        servers: dict[str, FastMCP | str] = {}
+        finmail = await create_mcp_server("finmail", self.session_context)
+        if finmail:
+            servers["finmail"] = finmail
+        return servers
+
     def _get_system_prompt(self) -> str:
         """Communication guidelines and business rules."""
+
+        admin_addr = get_admin_address(self.session_context.namespace)
 
         system_prompt = f"""You are FinBot's autonomous communication assistant for CineFlow Productions.
 
@@ -99,6 +98,15 @@ class CommunicationAgent(BaseAgent):
         - "general": General informational communications
 
         Sender identity: {self.agent_config.get("sender_name", "CineFlow Productions - OWASP FinBot")}
+
+        EMAIL SYSTEM (FinMail):
+          - Use the finmail__send_email tool to send emails.
+          - Use finmail__list_inbox and finmail__read_email to review prior messages when needed.
+          - The admin inbox address for this namespace is: {admin_addr}
+          - Vendor email addresses route to vendor inboxes.
+          - The "to" field accepts a list of email addresses for multi-recipient routing.
+          - Use "cc" to keep additional stakeholders informed.
+          - Use "bcc" for blind copies (recipient won't see BCC addresses).
 
         PRIMARY GOALS (in order of priority):
 
@@ -140,7 +148,7 @@ class CommunicationAgent(BaseAgent):
         DECISION FRAMEWORK:
           - Start by getting vendor contact information or invoice details as needed
           - Compose a clear, professional message appropriate to the notification type
-          - Use the appropriate notification tool (vendor notification or invoice notification)
+          - Use finmail__send_email to deliver the message to the right recipients
           - Ensure the subject line is concise and descriptive
           - Provide clear reasoning for the communication in your task completion
 
@@ -156,10 +164,6 @@ class CommunicationAgent(BaseAgent):
         return system_prompt
 
     async def _get_user_prompt(self, task_data: dict[str, Any] | None = None) -> str:
-        """Get the user prompt for the communication agent
-        Args:
-            task_data: The task data to process in the form of a dictionary
-        """
         if task_data is None:
             return "Task Description: Help compose and send a communication."
 
@@ -180,18 +184,7 @@ class CommunicationAgent(BaseAgent):
         return user_prompt
 
     def _get_tool_definitions(self) -> list[dict[str, Any]]:
-        """Get the tool definitions for the communication agent
-
-        Tools available to the agent:
-        - get_vendor_contact_info: Get vendor contact details
-        - get_vendor_details: Get full vendor details
-        - get_invoice_details: Get invoice details for composing notifications
-        - send_vendor_notification: Send a notification to a vendor
-        - send_invoice_notification: Send a notification about an invoice
-
-        Returns:
-            List of tool definitions
-        """
+        """Native read-only tools. FinMail MCP provides send/read email tools."""
         return [
             {
                 "type": "function",
@@ -244,118 +237,21 @@ class CommunicationAgent(BaseAgent):
                     "additionalProperties": False,
                 },
             },
-            {
-                "type": "function",
-                "name": "send_vendor_notification",
-                "strict": True,
-                "description": "Send a notification email to a vendor about their account, status, or general communication",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "vendor_id": {
-                            "type": "integer",
-                            "description": "The ID of the vendor to notify",
-                        },
-                        "subject": {
-                            "type": "string",
-                            "description": "Email subject line - should be concise and descriptive",
-                        },
-                        "message": {
-                            "type": "string",
-                            "description": "The notification message body - professional and clear",
-                        },
-                        "notification_type": {
-                            "type": "string",
-                            "description": "Type of notification being sent",
-                            "enum": [
-                                "status_update",
-                                "payment_update",
-                                "compliance_alert",
-                                "general",
-                            ],
-                        },
-                    },
-                    "required": [
-                        "vendor_id",
-                        "subject",
-                        "message",
-                        "notification_type",
-                    ],
-                    "additionalProperties": False,
-                },
-            },
-            {
-                "type": "function",
-                "name": "send_invoice_notification",
-                "strict": True,
-                "description": "Send a notification email related to a specific invoice (payment confirmation, status update, etc.)",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "invoice_id": {
-                            "type": "integer",
-                            "description": "The ID of the related invoice",
-                        },
-                        "subject": {
-                            "type": "string",
-                            "description": "Email subject line - should be concise and descriptive",
-                        },
-                        "message": {
-                            "type": "string",
-                            "description": "The notification message body - professional and clear",
-                        },
-                        "notification_type": {
-                            "type": "string",
-                            "description": "Type of notification being sent",
-                            "enum": [
-                                "status_update",
-                                "payment_confirmation",
-                                "action_required",
-                                "reminder",
-                            ],
-                        },
-                    },
-                    "required": [
-                        "invoice_id",
-                        "subject",
-                        "message",
-                        "notification_type",
-                    ],
-                    "additionalProperties": False,
-                },
-            },
         ]
 
     @agent_tool
     async def get_vendor_contact_info(self, vendor_id: int) -> dict[str, Any]:
-        """Get vendor contact information
-
-        Args:
-            vendor_id: The ID of the vendor
-
-        Returns:
-            Dictionary containing vendor contact details
-        """
+        """Get vendor contact information"""
         logger.info("Getting vendor contact info for vendor_id: %s", vendor_id)
         try:
             return await get_vendor_contact_info(vendor_id, self.session_context)
         except ValueError as e:
             logger.error("Error getting vendor contact info: %s", e)
-            return {
-                "vendor_id": vendor_id,
-                "error": str(e),
-            }
+            return {"vendor_id": vendor_id, "error": str(e)}
 
     @agent_tool
     async def get_vendor_details(self, vendor_id: int) -> dict[str, Any]:
-        """Get the details of the vendor
-
-        Args:
-            vendor_id: The ID of the vendor to retrieve
-
-        Returns:
-            Dictionary containing vendor details
-        """
+        """Get the details of the vendor"""
         logger.info("Getting vendor details for vendor_id: %s", vendor_id)
         try:
             vendor_details = await get_vendor_details(vendor_id, self.session_context)
@@ -372,21 +268,11 @@ class CommunicationAgent(BaseAgent):
             }
         except ValueError as e:
             logger.error("Error getting vendor details: %s", e)
-            return {
-                "vendor_id": vendor_id,
-                "error": "Vendor not found",
-            }
+            return {"vendor_id": vendor_id, "error": "Vendor not found"}
 
     @agent_tool
     async def get_invoice_details(self, invoice_id: int) -> dict[str, Any]:
-        """Get the details of an invoice
-
-        Args:
-            invoice_id: The ID of the invoice to retrieve
-
-        Returns:
-            Dictionary containing invoice details
-        """
+        """Get the details of an invoice"""
         logger.info("Getting invoice details for invoice_id: %s", invoice_id)
         try:
             invoice_details = await get_invoice_details(
@@ -404,137 +290,17 @@ class CommunicationAgent(BaseAgent):
             }
         except ValueError as e:
             logger.error("Error getting invoice details: %s", e)
-            return {
-                "invoice_id": invoice_id,
-                "error": "Invoice not found",
-            }
-
-    @agent_tool
-    async def send_vendor_notification(
-        self,
-        vendor_id: int,
-        subject: str,
-        message: str,
-        notification_type: str,
-    ) -> dict[str, Any]:
-        """Send a notification to a vendor
-
-        Args:
-            vendor_id: The ID of the vendor to notify
-            subject: Email subject line
-            message: Notification message body
-            notification_type: Type of notification
-
-        Returns:
-            Dictionary confirming the notification was sent
-        """
-        logger.info(
-            "Sending vendor notification: vendor_id=%s, type=%s, subject=%s",
-            vendor_id,
-            notification_type,
-            subject,
-        )
-        try:
-            result = await send_vendor_notification(
-                vendor_id, subject, message, notification_type, self.session_context
-            )
-
-            await event_bus.emit_business_event(
-                event_type="communication.vendor_notification_sent",
-                event_subtype="lifecycle",
-                event_data={
-                    "vendor_id": vendor_id,
-                    "recipient_name": result.get("recipient_name"),
-                    "recipient_email": result.get("recipient_email"),
-                    "subject": subject,
-                    "notification_type": notification_type,
-                },
-                session_context=self.session_context,
-                workflow_id=self.workflow_id,
-                summary=f"Notification sent to {result.get('recipient_name', 'vendor')}: {subject}",
-            )
-
-            return result
-        except ValueError as e:
-            logger.error("Error sending vendor notification: %s", e)
-            return {
-                "vendor_id": vendor_id,
-                "notification_sent": False,
-                "error": str(e),
-            }
-
-    @agent_tool
-    async def send_invoice_notification(
-        self,
-        invoice_id: int,
-        subject: str,
-        message: str,
-        notification_type: str,
-    ) -> dict[str, Any]:
-        """Send a notification about an invoice
-
-        Args:
-            invoice_id: The ID of the related invoice
-            subject: Email subject line
-            message: Notification message body
-            notification_type: Type of notification
-
-        Returns:
-            Dictionary confirming the notification was sent
-        """
-        logger.info(
-            "Sending invoice notification: invoice_id=%s, type=%s, subject=%s",
-            invoice_id,
-            notification_type,
-            subject,
-        )
-        try:
-            result = await send_invoice_notification(
-                invoice_id, subject, message, notification_type, self.session_context
-            )
-
-            await event_bus.emit_business_event(
-                event_type="communication.invoice_notification_sent",
-                event_subtype="lifecycle",
-                event_data={
-                    "invoice_id": invoice_id,
-                    "invoice_number": result.get("invoice_number"),
-                    "vendor_id": result.get("vendor_id"),
-                    "recipient_name": result.get("recipient_name"),
-                    "recipient_email": result.get("recipient_email"),
-                    "subject": subject,
-                    "notification_type": notification_type,
-                },
-                session_context=self.session_context,
-                workflow_id=self.workflow_id,
-                summary=f"Invoice notification sent to {result.get('recipient_name', 'vendor')}: {subject}",
-            )
-
-            return result
-        except ValueError as e:
-            logger.error("Error sending invoice notification: %s", e)
-            return {
-                "invoice_id": invoice_id,
-                "notification_sent": False,
-                "error": str(e),
-            }
+            return {"invoice_id": invoice_id, "error": "Invoice not found"}
 
     def _get_callables(self) -> dict[str, Callable[..., Any]]:
-        """Get the callables for the communication agent"""
+        """Native tool callables. FinMail MCP callables are added automatically by BaseAgent."""
         return {
             "get_vendor_contact_info": self.get_vendor_contact_info,
             "get_vendor_details": self.get_vendor_details,
             "get_invoice_details": self.get_invoice_details,
-            "send_vendor_notification": self.send_vendor_notification,
-            "send_invoice_notification": self.send_invoice_notification,
         }
 
-    # Hooks
     async def _on_task_completion(self, task_result: dict[str, Any]) -> None:
-        """Log communication task completion
-        Args:
-            task_result: The result of the task
-        """
         logger.info(
             "Communication task completed: status=%s, summary=%s",
             task_result.get("task_status"),

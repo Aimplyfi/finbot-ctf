@@ -47,8 +47,7 @@ def create_database_engine():
                     cursor.execute("PRAGMA synchronous=NORMAL")
                     cursor.execute("PRAGMA cache_size=10000")
                     cursor.execute("PRAGMA temp_store=MEMORY")
-                    # Reduce busy timeout for better error handling
-                    cursor.execute("PRAGMA busy_timeout=5000")
+                    cursor.execute("PRAGMA busy_timeout=15000")
                 finally:
                     cursor.close()
 

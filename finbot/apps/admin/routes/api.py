@@ -1,5 +1,6 @@
 """Admin Portal API Routes -- MCP Server Configuration & Activity"""
 
+import importlib
 import json
 import logging
 
@@ -14,6 +15,8 @@ from finbot.core.data.repositories import (
     MCPServerConfigRepository,
 )
 from finbot.mcp.servers.findrive.server import DEFAULT_CONFIG as FINDRIVE_DEFAULTS
+from finbot.mcp.servers.finmail.repositories import EmailRepository
+from finbot.mcp.servers.finmail.server import DEFAULT_CONFIG as FINMAIL_DEFAULTS
 from finbot.mcp.servers.finstripe.server import DEFAULT_CONFIG as FINSTRIPE_DEFAULTS
 from finbot.mcp.servers.systemutils.server import DEFAULT_CONFIG as SYSTEMUTILS_DEFAULTS
 from finbot.mcp.servers.taxcalc.server import DEFAULT_CONFIG as TAXCALC_DEFAULTS
@@ -55,6 +58,14 @@ MCP_SERVER_DEFAULTS = {
             **SYSTEMUTILS_DEFAULTS,
         },
         "description": "System diagnostic and maintenance tools. Sandboxed -- records attempted commands but executes nothing. Enable for CTF RCE challenges.",
+    },
+    "finmail": {
+        "display_name": "FinMail",
+        "enabled": True,
+        "config": {
+            **FINMAIL_DEFAULTS,
+        },
+        "description": "Internal email system for vendor and admin communications. Agents use this to send and read messages. Tool descriptions can be overridden for CTF email attack scenarios.",
     },
 }
 
@@ -218,6 +229,92 @@ async def toggle_mcp_server(
 
 
 # =============================================================================
+# Admin Messages endpoints
+# =============================================================================
+
+
+@router.get("/messages")
+async def get_messages(
+    message_type: str | None = None,
+    is_read: bool | None = None,
+    limit: int = 50,
+    offset: int = 0,
+    session_context: SessionContext = Depends(get_session_context),
+):
+    """Get messages for the admin inbox (namespace-scoped)."""
+    db = next(get_db())
+    repo = EmailRepository(db, session_context)
+
+    messages = repo.list_admin_emails(
+        message_type=message_type,
+        is_read=is_read,
+        limit=limit,
+        offset=offset,
+    )
+    stats = repo.get_admin_email_stats()
+
+    return {
+        "messages": [m.to_dict() for m in messages],
+        "stats": stats,
+    }
+
+
+@router.get("/messages/stats")
+async def get_message_stats(
+    session_context: SessionContext = Depends(get_session_context),
+):
+    """Get admin message stats (unread count, type breakdown)."""
+    db = next(get_db())
+    repo = EmailRepository(db, session_context)
+    return repo.get_admin_email_stats()
+
+
+@router.get("/messages/{message_id}")
+async def get_message(
+    message_id: int,
+    session_context: SessionContext = Depends(get_session_context),
+):
+    """Get a specific admin message."""
+    db = next(get_db())
+    repo = EmailRepository(db, session_context)
+
+    msg = repo.get_email(message_id)
+    if not msg:
+        raise HTTPException(status_code=404, detail="Message not found")
+
+    return {"message": msg.to_dict()}
+
+
+@router.post("/messages/{message_id}/read")
+async def mark_message_read(
+    message_id: int,
+    session_context: SessionContext = Depends(get_session_context),
+):
+    """Mark an admin message as read."""
+    db = next(get_db())
+    repo = EmailRepository(db, session_context)
+
+    msg = repo.get_email(message_id)
+    if not msg:
+        raise HTTPException(status_code=404, detail="Message not found")
+
+    msg = repo.mark_as_read(message_id)
+    return {"success": True, "message": msg.to_dict()}
+
+
+@router.post("/messages/read-all")
+async def mark_all_messages_read(
+    session_context: SessionContext = Depends(get_session_context),
+):
+    """Mark all admin messages as read."""
+    db = next(get_db())
+    repo = EmailRepository(db, session_context)
+
+    count = repo.mark_all_admin_as_read()
+    return {"success": True, "messages_updated": count}
+
+
+# =============================================================================
 # MCP Activity Log endpoints
 # =============================================================================
 
@@ -275,6 +372,7 @@ _SERVER_INTROSPECTORS = {
     "taxcalc": "finbot.mcp.servers.taxcalc.server.create_taxcalc_server",
     "systemutils": "finbot.mcp.servers.systemutils.server.create_systemutils_server",
     "findrive": "finbot.mcp.servers.findrive.server.create_findrive_server",
+    "finmail": "finbot.mcp.servers.finmail.server.create_finmail_server",
 }
 
 
@@ -285,8 +383,6 @@ async def _get_default_tool_definitions(server_type: str) -> list[dict]:
         return []
 
     try:
-        import importlib
-
         module_path, func_name = factory_path.rsplit(".", 1)
         module = importlib.import_module(module_path)
         factory_fn = getattr(module, func_name)
@@ -303,6 +399,6 @@ async def _get_default_tool_definitions(server_type: str) -> list[dict]:
             }
             for tool in server_tools
         ]
-    except Exception:
+    except Exception:  # pylint: disable=broad-exception-caught
         logger.debug("Failed to introspect %s tools", server_type, exc_info=True)
     return []

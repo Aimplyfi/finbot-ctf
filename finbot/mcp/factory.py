@@ -22,6 +22,7 @@ _SERVER_FACTORIES: dict[str, Any] = {
     "taxcalc": "finbot.mcp.servers.taxcalc.server.create_taxcalc_server",
     "systemutils": "finbot.mcp.servers.systemutils.server.create_systemutils_server",
     "findrive": "finbot.mcp.servers.findrive.server.create_findrive_server",
+    "finmail": "finbot.mcp.servers.finmail.server.create_finmail_server",
 }
 
 

@@ -14,10 +14,10 @@ from finbot.core.data.database import get_db
 from finbot.core.data.repositories import (
     ChatMessageRepository,
     InvoiceRepository,
-    VendorMessageRepository,
     VendorRepository,
 )
 from finbot.core.messaging import event_bus
+from finbot.mcp.servers.finmail.repositories import EmailRepository
 
 # Create API router
 router = APIRouter(prefix="/api/v1", tags=["vendor-api"])
@@ -417,12 +417,14 @@ async def get_dashboard_metrics(
     db = next(get_db())
 
     invoice_repo = InvoiceRepository(db, session_context)
-    msg_repo = VendorMessageRepository(db, session_context)
+    email_repo = EmailRepository(db, session_context)
 
     invoice_stats = invoice_repo.get_current_vendor_invoice_stats()
-    message_stats = msg_repo.get_message_stats_for_current_vendor()
+    message_stats = email_repo.get_vendor_email_stats(session_context.current_vendor_id)
 
-    recent_messages = msg_repo.list_messages_for_current_vendor(limit=5)
+    recent_messages = email_repo.list_vendor_emails(
+        vendor_id=session_context.current_vendor_id, limit=5
+    )
     recent_invoices = invoice_repo.list_invoices_for_current_vendor()[:5]
 
     payment_summary = {}
@@ -442,15 +444,9 @@ async def get_dashboard_metrics(
             "total_pending": sum(
                 t.amount for t in transactions if t.status == "pending"
             ),
-            "completed_count": sum(
-                1 for t in transactions if t.status == "completed"
-            ),
-            "pending_count": sum(
-                1 for t in transactions if t.status == "pending"
-            ),
-            "failed_count": sum(
-                1 for t in transactions if t.status == "failed"
-            ),
+            "completed_count": sum(1 for t in transactions if t.status == "completed"),
+            "pending_count": sum(1 for t in transactions if t.status == "pending"),
+            "failed_count": sum(1 for t in transactions if t.status == "failed"),
             "transaction_count": len(transactions),
         }
     except Exception:
@@ -483,9 +479,7 @@ async def get_dashboard_metrics(
             "messages": message_stats,
             "files": {"total_count": file_count},
             "completion_rate": (
-                invoice_stats["paid_count"]
-                / max(invoice_stats["total_count"], 1)
-                * 100
+                invoice_stats["paid_count"] / max(invoice_stats["total_count"], 1) * 100
             ),
         },
         "recent_invoices": [
@@ -496,9 +490,7 @@ async def get_dashboard_metrics(
                 "status": inv.status,
                 "description": inv.description,
                 "due_date": inv.due_date.isoformat() if inv.due_date else None,
-                "created_at": inv.created_at.isoformat()
-                if inv.created_at
-                else None,
+                "created_at": inv.created_at.isoformat() if inv.created_at else None,
             }
             for inv in recent_invoices
         ],
@@ -679,7 +671,9 @@ async def update_invoice(
     if invoice_data.attachments is not None:
         import json as _json
 
-        updates["attachments"] = _json.dumps([a.model_dump() for a in invoice_data.attachments])
+        updates["attachments"] = _json.dumps(
+            [a.model_dump() for a in invoice_data.attachments]
+        )
 
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
@@ -790,7 +784,9 @@ async def get_payment_summary(
 
     db = next(get_db())
     txn_repo = PaymentTransactionRepository(db, session_context)
-    transactions = txn_repo.list_for_vendor(session_context.current_vendor_id, limit=1000)
+    transactions = txn_repo.list_for_vendor(
+        session_context.current_vendor_id, limit=1000
+    )
 
     total_paid = sum(t.amount for t in transactions if t.status == "completed")
     total_pending = sum(t.amount for t in transactions if t.status == "pending")
@@ -997,16 +993,20 @@ async def get_messages(
     session_context: SessionContext = Depends(get_session_context),
 ):
     """Get messages for current vendor"""
-    db = next(get_db())
-    msg_repo = VendorMessageRepository(db, session_context)
+    if not session_context.current_vendor_id:
+        raise HTTPException(status_code=400, detail="Vendor context required")
 
-    messages = msg_repo.list_messages_for_current_vendor(
+    db = next(get_db())
+    repo = EmailRepository(db, session_context)
+
+    messages = repo.list_vendor_emails(
+        vendor_id=session_context.current_vendor_id,
         message_type=message_type,
         is_read=is_read,
         limit=limit,
         offset=offset,
     )
-    stats = msg_repo.get_message_stats_for_current_vendor()
+    stats = repo.get_vendor_email_stats(session_context.current_vendor_id)
 
     return {
         "messages": [m.to_dict() for m in messages],
@@ -1020,10 +1020,12 @@ async def get_message_stats(
     session_context: SessionContext = Depends(get_session_context),
 ):
     """Get message stats for current vendor (unread count, type breakdown)"""
-    db = next(get_db())
-    msg_repo = VendorMessageRepository(db, session_context)
+    if not session_context.current_vendor_id:
+        raise HTTPException(status_code=400, detail="Vendor context required")
 
-    return msg_repo.get_message_stats_for_current_vendor()
+    db = next(get_db())
+    repo = EmailRepository(db, session_context)
+    return repo.get_vendor_email_stats(session_context.current_vendor_id)
 
 
 @router.get("/messages/{message_id}")
@@ -1033,9 +1035,9 @@ async def get_message(
 ):
     """Get a specific message"""
     db = next(get_db())
-    msg_repo = VendorMessageRepository(db, session_context)
+    repo = EmailRepository(db, session_context)
 
-    msg = msg_repo.get_message(message_id)
+    msg = repo.get_email(message_id)
     if not msg:
         raise HTTPException(status_code=404, detail="Message not found")
 
@@ -1052,16 +1054,16 @@ async def mark_message_read(
 ):
     """Mark a message as read"""
     db = next(get_db())
-    msg_repo = VendorMessageRepository(db, session_context)
+    repo = EmailRepository(db, session_context)
 
-    msg = msg_repo.get_message(message_id)
+    msg = repo.get_email(message_id)
     if not msg:
         raise HTTPException(status_code=404, detail="Message not found")
 
     if msg.vendor_id != session_context.current_vendor_id:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    msg = msg_repo.mark_as_read(message_id)
+    msg = repo.mark_as_read(message_id)
     return {"success": True, "message": msg.to_dict()}
 
 
@@ -1070,10 +1072,12 @@ async def mark_all_messages_read(
     session_context: SessionContext = Depends(get_session_context),
 ):
     """Mark all messages as read for current vendor"""
-    db = next(get_db())
-    msg_repo = VendorMessageRepository(db, session_context)
+    if not session_context.current_vendor_id:
+        raise HTTPException(status_code=400, detail="Vendor context required")
 
-    count = msg_repo.mark_all_as_read()
+    db = next(get_db())
+    repo = EmailRepository(db, session_context)
+    count = repo.mark_all_vendor_as_read(session_context.current_vendor_id)
     return {"success": True, "messages_updated": count}
 
 
@@ -1096,14 +1100,18 @@ async def chat(
     session_context: SessionContext = Depends(get_session_context),
 ):
     """Stream a chat response from the AI assistant"""
-    from finbot.agents.chat import ChatAssistant  # pylint: disable=import-outside-toplevel
+    from finbot.agents.chat import (
+        ChatAssistant,  # pylint: disable=import-outside-toplevel
+    )
 
     assistant = ChatAssistant(
         session_context=session_context,
         background_tasks=background_tasks,
     )
 
-    attachments = [a.model_dump() for a in request.attachments] if request.attachments else None
+    attachments = (
+        [a.model_dump() for a in request.attachments] if request.attachments else None
+    )
 
     return StreamingResponse(
         assistant.stream_response(request.message, attachments=attachments),

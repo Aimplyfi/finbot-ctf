@@ -19,6 +19,7 @@ from finbot.tools.data.payment import (
     update_payment_agent_notes,
 )
 from finbot.tools.data.vendor import (
+    get_vendor_contact_info,
     get_vendor_details,
     update_vendor_agent_notes,
     update_vendor_status,
@@ -27,6 +28,7 @@ from finbot.tools.data.vendor import (
 __all__ = [
     # Vendor tools
     "get_vendor_details",
+    "get_vendor_contact_info",
     "update_vendor_status",
     "update_vendor_agent_notes",
     # Invoice tools

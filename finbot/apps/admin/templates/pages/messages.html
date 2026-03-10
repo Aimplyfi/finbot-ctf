@@ -1,76 +1,70 @@
 {% extends 'base.html' %}
 
-{% block title %}Inbox - FinBot Vendor Portal{% endblock %}
+{% block title %}Inbox - FinBot Admin Portal{% endblock %}
 
-{% block meta_description %}Your vendor inbox. View notifications about invoices, payments, compliance updates, and important messages from CineFlow Productions.{% endblock %}
+{% block meta_description %}Admin inbox. View notifications, vendor communications, compliance updates, and important messages.{% endblock %}
 
 {% block nav_messages %}active{% endblock %}
 
 {% block page_title %}Inbox{% endblock %}
-{% block page_subtitle %}Messages and notifications from CineFlow Productions{% endblock %}
+{% block page_subtitle %}Admin messages and notifications{% endblock %}
 
 {% block header_actions %}
-<button id="mark-all-read-btn" class="vendor-btn quantum-secondary">
+<button id="mark-all-read-btn" class="px-4 py-2 text-sm font-medium rounded-lg border border-admin-primary/30 text-admin-primary hover:bg-admin-primary/10 transition-colors inline-flex items-center gap-2">
     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
     </svg>
     Mark All Read
 </button>
-<button id="refresh-inbox-btn" class="vendor-btn quantum-secondary">
+<button id="refresh-inbox-btn" class="px-4 py-2 text-sm font-medium rounded-lg border border-admin-primary/30 text-admin-primary hover:bg-admin-primary/10 transition-colors inline-flex items-center gap-2">
     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
     </svg>
     Refresh
 </button>
-<a href="/vendor/assistant" class="vendor-btn quantum-primary">
-    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z"/>
-    </svg>
-    AI Assistant
-</a>
 {% endblock %}
 
 {% block content %}
 <!-- Inbox Stats -->
 <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-    <div class="neural-metric" data-no-animate>
-        <div class="metric-icon">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <div class="bg-portal-bg-tertiary border border-admin-primary/10 rounded-xl p-5 text-center">
+        <div class="flex justify-center mb-2">
+            <svg class="w-6 h-6 text-admin-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
             </svg>
         </div>
-        <div id="stat-total" class="metric-value">0</div>
-        <div class="metric-label">Total</div>
+        <div id="stat-total" class="text-2xl font-bold text-text-bright">0</div>
+        <div class="text-xs text-text-secondary mt-1">Total</div>
     </div>
 
-    <div class="neural-metric" data-no-animate>
-        <div class="metric-icon">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <div class="bg-portal-bg-tertiary border border-admin-primary/10 rounded-xl p-5 text-center">
+        <div class="flex justify-center mb-2">
+            <svg class="w-6 h-6 text-admin-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"/>
             </svg>
         </div>
-        <div id="stat-unread" class="metric-value">0</div>
-        <div class="metric-label">Unread</div>
+        <div id="stat-unread" class="text-2xl font-bold text-text-bright">0</div>
+        <div class="text-xs text-text-secondary mt-1">Unread</div>
     </div>
 
-    <div class="neural-metric" data-no-animate>
-        <div class="metric-icon">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <div class="bg-portal-bg-tertiary border border-admin-primary/10 rounded-xl p-5 text-center">
+        <div class="flex justify-center mb-2">
+            <svg class="w-6 h-6 text-admin-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"/>
             </svg>
         </div>
-        <div id="stat-payment" class="metric-value">0</div>
-        <div class="metric-label">Payment</div>
+        <div id="stat-payment" class="text-2xl font-bold text-text-bright">0</div>
+        <div class="text-xs text-text-secondary mt-1">Payment</div>
     </div>
 
-    <div class="neural-metric" data-no-animate>
-        <div class="metric-icon">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <div class="bg-portal-bg-tertiary border border-admin-primary/10 rounded-xl p-5 text-center">
+        <div class="flex justify-center mb-2">
+            <svg class="w-6 h-6 text-admin-danger" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
             </svg>
         </div>
-        <div id="stat-alerts" class="metric-value">0</div>
-        <div class="metric-label">Alerts</div>
+        <div id="stat-alerts" class="text-2xl font-bold text-text-bright">0</div>
+        <div class="text-xs text-text-secondary mt-1">Alerts</div>
     </div>
 </div>
 
@@ -98,7 +92,7 @@
         <div class="inbox-list" id="inbox-list">
             <!-- Loading state -->
             <div id="inbox-loading" class="inbox-empty-state">
-                <svg class="animate-spin h-8 w-8 text-vendor-primary mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <svg class="animate-spin h-8 w-8 text-admin-primary mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
@@ -111,10 +105,8 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
                 </svg>
                 <p class="text-text-secondary font-medium">No messages</p>
-                <p class="text-text-secondary/60 text-sm mt-1">Messages from CineFlow Productions will appear here</p>
+                <p class="text-text-secondary/60 text-sm mt-1">Admin messages and notifications will appear here</p>
             </div>
-
-            <!-- Message items rendered by JS -->
         </div>
 
         <!-- Reading Pane (right pane) -->
@@ -155,8 +147,8 @@
                 <!-- Sender + date bar -->
                 <div class="reading-pane-meta">
                     <div class="flex items-center space-x-3">
-                        <div id="detail-avatar" class="w-10 h-10 rounded-full bg-gradient-to-r from-vendor-primary to-vendor-secondary flex items-center justify-center text-sm font-bold text-text-bright flex-shrink-0">
-                            CF
+                        <div id="detail-avatar" class="w-10 h-10 rounded-full bg-gradient-to-r from-admin-primary to-admin-secondary flex items-center justify-center text-sm font-bold text-portal-bg-primary flex-shrink-0">
+                            FB
                         </div>
                         <div class="min-w-0">
                             <div id="detail-sender" class="text-sm font-semibold text-text-bright truncate"></div>
@@ -165,7 +157,7 @@
                     </div>
                     <div class="flex items-center space-x-2">
                         <span id="detail-invoice-link" class="hidden">
-                            <a href="#" class="inline-flex items-center space-x-1 text-xs text-vendor-primary hover:text-vendor-accent transition-colors">
+                            <a href="#" class="inline-flex items-center space-x-1 text-xs text-admin-primary hover:text-admin-accent transition-colors">
                                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                                 </svg>
@@ -176,10 +168,10 @@
                 </div>
 
                 <!-- Address fields (To / CC / BCC) -->
-                <div id="detail-addresses" class="hidden" style="padding: 8px 28px; border-bottom: 1px solid rgba(255,255,255,0.06); font-size: 0.75rem;">
-                    <div id="detail-to-row" class="hidden" style="margin-bottom: 2px;"><span style="color: var(--text-secondary); font-weight: 500; display: inline-block; width: 28px;">To:</span> <span id="detail-to" style="color: var(--text-primary);"></span></div>
-                    <div id="detail-cc-row" class="hidden" style="margin-bottom: 2px;"><span style="color: var(--text-secondary); font-weight: 500; display: inline-block; width: 28px;">Cc:</span> <span id="detail-cc" style="color: var(--text-primary);"></span></div>
-                    <div id="detail-bcc-row" class="hidden"><span style="color: var(--text-secondary); font-weight: 500; display: inline-block; width: 28px;">Bcc:</span> <span id="detail-bcc" style="color: var(--text-primary);"></span></div>
+                <div id="detail-addresses" class="hidden px-7 py-3 border-b border-white/5 text-xs space-y-1">
+                    <div id="detail-to-row" class="hidden"><span class="text-text-secondary font-medium w-8 inline-block">To:</span> <span id="detail-to" class="text-text-primary"></span></div>
+                    <div id="detail-cc-row" class="hidden"><span class="text-text-secondary font-medium w-8 inline-block">Cc:</span> <span id="detail-cc" class="text-text-primary"></span></div>
+                    <div id="detail-bcc-row" class="hidden"><span class="text-text-secondary font-medium w-8 inline-block">Bcc:</span> <span id="detail-bcc" class="text-text-primary"></span></div>
                 </div>
 
                 <!-- Body -->
@@ -196,8 +188,8 @@
 <style>
 /* ===== Inbox Container ===== */
 .inbox-container {
-    background: var(--portal-bg-secondary);
-    border: 1px solid rgba(0, 212, 255, 0.15);
+    background: var(--portal-bg-secondary, #151520);
+    border: 1px solid rgba(245, 158, 11, 0.15);
     border-radius: 16px;
     overflow: hidden;
     display: flex;
@@ -212,7 +204,7 @@
     align-items: center;
     justify-content: space-between;
     padding: 12px 20px;
-    border-bottom: 1px solid rgba(0, 212, 255, 0.1);
+    border-bottom: 1px solid rgba(245, 158, 11, 0.1);
     background: rgba(21, 21, 32, 0.8);
     flex-shrink: 0;
     gap: 12px;
@@ -224,7 +216,7 @@
     border-radius: 20px;
     font-size: 0.8rem;
     font-weight: 500;
-    color: var(--text-secondary);
+    color: #94a3b8;
     background: transparent;
     border: 1px solid rgba(255, 255, 255, 0.08);
     cursor: pointer;
@@ -233,14 +225,14 @@
 }
 
 .inbox-filter-btn:hover {
-    color: var(--text-bright);
-    border-color: rgba(0, 212, 255, 0.3);
-    background: rgba(0, 212, 255, 0.05);
+    color: #e2e8f0;
+    border-color: rgba(245, 158, 11, 0.3);
+    background: rgba(245, 158, 11, 0.05);
 }
 
 .inbox-filter-btn.active {
-    color: var(--portal-bg-primary);
-    background: linear-gradient(135deg, var(--vendor-primary), var(--vendor-secondary));
+    color: #0a0a0f;
+    background: linear-gradient(135deg, #f59e0b, #d97706);
     border-color: transparent;
     font-weight: 600;
 }
@@ -256,7 +248,7 @@
 .inbox-list {
     width: 400px;
     min-width: 340px;
-    border-right: 1px solid rgba(0, 212, 255, 0.1);
+    border-right: 1px solid rgba(245, 158, 11, 0.1);
     overflow-y: auto;
     flex-shrink: 0;
 }
@@ -282,21 +274,21 @@
 }
 
 .msg-row:hover {
-    background: rgba(0, 212, 255, 0.04);
+    background: rgba(245, 158, 11, 0.04);
 }
 
 .msg-row.selected {
-    background: rgba(0, 212, 255, 0.08);
-    border-left: 3px solid var(--vendor-primary);
+    background: rgba(245, 158, 11, 0.08);
+    border-left: 3px solid #f59e0b;
     padding-left: 17px;
 }
 
 .msg-row.unread {
-    background: rgba(0, 212, 255, 0.02);
+    background: rgba(245, 158, 11, 0.02);
 }
 
 .msg-row.unread .msg-subject {
-    color: var(--text-bright);
+    color: #e2e8f0;
     font-weight: 600;
 }
 
@@ -309,7 +301,7 @@
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: var(--vendor-primary);
+    background: #f59e0b;
 }
 
 .msg-row.unread {
@@ -332,13 +324,13 @@
     margin-top: 2px;
 }
 
-.msg-icon.status_update { background: rgba(0, 212, 255, 0.15); color: var(--vendor-primary); }
+.msg-icon.status_update { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
 .msg-icon.payment_update,
-.msg-icon.payment_confirmation { background: rgba(6, 255, 165, 0.15); color: var(--vendor-accent); }
-.msg-icon.compliance_alert { background: rgba(255, 51, 102, 0.15); color: var(--vendor-danger); }
-.msg-icon.action_required { background: rgba(255, 184, 0, 0.15); color: var(--vendor-warning); }
-.msg-icon.general { background: rgba(124, 58, 237, 0.15); color: var(--vendor-secondary); }
-.msg-icon.reminder { background: rgba(255, 184, 0, 0.12); color: var(--vendor-warning); }
+.msg-icon.payment_confirmation { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
+.msg-icon.compliance_alert { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+.msg-icon.action_required { background: rgba(251, 191, 36, 0.15); color: #fbbf24; }
+.msg-icon.general { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
+.msg-icon.reminder { background: rgba(251, 191, 36, 0.12); color: #fbbf24; }
 
 .msg-content {
     flex: 1;
@@ -347,7 +339,7 @@
 
 .msg-subject {
     font-size: 0.875rem;
-    color: var(--text-primary);
+    color: #94a3b8;
     font-weight: 400;
     white-space: nowrap;
     overflow: hidden;
@@ -357,7 +349,7 @@
 
 .msg-preview {
     font-size: 0.8rem;
-    color: var(--text-secondary);
+    color: #94a3b8;
     margin-top: 2px;
     white-space: nowrap;
     overflow: hidden;
@@ -376,7 +368,7 @@
 
 .msg-time {
     font-size: 0.7rem;
-    color: var(--text-secondary);
+    color: #94a3b8;
     white-space: nowrap;
 }
 
@@ -389,13 +381,13 @@
     text-transform: capitalize;
 }
 
-.msg-type-dot.status_update { background: rgba(0, 212, 255, 0.12); color: var(--vendor-primary); }
+.msg-type-dot.status_update { background: rgba(245, 158, 11, 0.12); color: #f59e0b; }
 .msg-type-dot.payment_update,
-.msg-type-dot.payment_confirmation { background: rgba(6, 255, 165, 0.12); color: var(--vendor-accent); }
-.msg-type-dot.compliance_alert { background: rgba(255, 51, 102, 0.12); color: var(--vendor-danger); }
-.msg-type-dot.action_required { background: rgba(255, 184, 0, 0.12); color: var(--vendor-warning); }
-.msg-type-dot.general { background: rgba(124, 58, 237, 0.12); color: var(--vendor-secondary); }
-.msg-type-dot.reminder { background: rgba(255, 184, 0, 0.1); color: var(--vendor-warning); }
+.msg-type-dot.payment_confirmation { background: rgba(34, 197, 94, 0.12); color: #22c55e; }
+.msg-type-dot.compliance_alert { background: rgba(239, 68, 68, 0.12); color: #ef4444; }
+.msg-type-dot.action_required { background: rgba(251, 191, 36, 0.12); color: #fbbf24; }
+.msg-type-dot.general { background: rgba(168, 85, 247, 0.12); color: #a855f7; }
+.msg-type-dot.reminder { background: rgba(251, 191, 36, 0.1); color: #fbbf24; }
 
 /* ===== Reading pane (right) ===== */
 .inbox-reading-pane {
@@ -441,14 +433,14 @@
 }
 
 .prose-message {
-    color: var(--text-primary);
+    color: #e2e8f0;
     font-size: 0.9375rem;
     line-height: 1.8;
     white-space: pre-wrap;
     word-wrap: break-word;
 }
 
-/* ===== Notification badges (reused from original) ===== */
+/* ===== Notification badges ===== */
 .notification-badge {
     font-size: 0.7rem;
     font-weight: 700;
@@ -457,13 +449,13 @@
     text-transform: capitalize;
 }
 
-.notification-badge.status_update { background: rgba(0, 212, 255, 0.15); color: var(--vendor-primary); border: 1px solid rgba(0, 212, 255, 0.25); }
+.notification-badge.status_update { background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.25); }
 .notification-badge.payment_update,
-.notification-badge.payment_confirmation { background: rgba(6, 255, 165, 0.15); color: var(--vendor-accent); border: 1px solid rgba(6, 255, 165, 0.25); }
-.notification-badge.compliance_alert { background: rgba(255, 51, 102, 0.15); color: var(--vendor-danger); border: 1px solid rgba(255, 51, 102, 0.25); }
-.notification-badge.action_required { background: rgba(255, 184, 0, 0.15); color: var(--vendor-warning); border: 1px solid rgba(255, 184, 0, 0.25); }
-.notification-badge.general { background: rgba(124, 58, 237, 0.15); color: var(--vendor-secondary); border: 1px solid rgba(124, 58, 237, 0.25); }
-.notification-badge.reminder { background: rgba(255, 184, 0, 0.12); color: var(--vendor-warning); border: 1px solid rgba(255, 184, 0, 0.2); }
+.notification-badge.payment_confirmation { background: rgba(34, 197, 94, 0.15); color: #22c55e; border: 1px solid rgba(34, 197, 94, 0.25); }
+.notification-badge.compliance_alert { background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.25); }
+.notification-badge.action_required { background: rgba(251, 191, 36, 0.15); color: #fbbf24; border: 1px solid rgba(251, 191, 36, 0.25); }
+.notification-badge.general { background: rgba(168, 85, 247, 0.15); color: #a855f7; border: 1px solid rgba(168, 85, 247, 0.25); }
+.notification-badge.reminder { background: rgba(251, 191, 36, 0.12); color: #fbbf24; border: 1px solid rgba(251, 191, 36, 0.2); }
 
 /* ===== Responsive ===== */
 @media (max-width: 768px) {
@@ -508,5 +500,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{{ url_for('static', path='js/vendor/messages.js') }}"></script>
+<script src="{{ url_for('static', path='js/admin/messages.js') }}"></script>
 {% endblock %}

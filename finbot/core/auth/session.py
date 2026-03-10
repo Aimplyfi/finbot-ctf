@@ -475,8 +475,16 @@ class SessionManager:
                 rotated_context = self._rotate_session(session_context, db)
                 return rotated_context, "session_rotated"
 
-            session.last_accessed = datetime.now(UTC)
-            db.commit()
+            try:
+                session.last_accessed = datetime.now(UTC)
+                db.commit()
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                db.rollback()
+                logger.warning(
+                    "Non-fatal: failed to update last_accessed for session %s: %s",
+                    session_id[:8],
+                    e,
+                )
 
             return session_context, "session_valid"
         except Exception as e:

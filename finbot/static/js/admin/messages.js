@@ -1,5 +1,5 @@
 /**
- * FinBot Vendor Portal - Inbox / Messages
+ * FinBot Admin Portal - Inbox / Messages
  */
 
 const InboxState = {
@@ -64,7 +64,7 @@ async function loadMessages() {
     showLoading(true);
 
     try {
-        const resp = await api.get('/vendor/api/v1/messages');
+        const resp = await api.get('/admin/api/v1/messages');
         const data = resp.data || resp;
         InboxState.messages = data.messages || [];
         InboxState.stats = data.stats || {};
@@ -103,7 +103,6 @@ function renderMessageList() {
     const emptyEl = document.getElementById('inbox-empty');
     const filtered = getFilteredMessages();
 
-    // Remove old message rows
     list.querySelectorAll('.msg-row').forEach(el => el.remove());
 
     const showingEl = document.getElementById('inbox-showing');
@@ -154,116 +153,6 @@ function createMessageRow(msg) {
     return row;
 }
 
-async function selectMessage(msg) {
-    InboxState.selectedId = msg.id;
-
-    // Highlight in list
-    document.querySelectorAll('.msg-row').forEach(r => r.classList.remove('selected'));
-    const row = document.querySelector(`.msg-row[data-id="${msg.id}"]`);
-    if (row) row.classList.add('selected');
-
-    // Mobile: show reading pane
-    document.querySelector('.inbox-panes')?.classList.add('detail-open');
-
-    // Populate reading pane
-    document.getElementById('reading-pane-empty')?.classList.add('hidden');
-    const content = document.getElementById('reading-pane-content');
-    content?.classList.remove('hidden');
-
-    setText('detail-subject', msg.subject);
-    setText('detail-sender', msg.sender_name || 'CineFlow Productions - FinBot');
-    setText('detail-date', formatMessageDate(msg.created_at));
-
-    const typeBadge = document.getElementById('detail-type-badge');
-    if (typeBadge) {
-        typeBadge.className = `notification-badge ${msg.message_type}`;
-        typeBadge.textContent = TYPE_LABELS[msg.message_type] || msg.message_type;
-    }
-
-    const channelEl = document.getElementById('detail-channel');
-    if (channelEl) {
-        channelEl.textContent = `via ${msg.channel || 'email'}`;
-    }
-
-    const bodyEl = document.getElementById('detail-body');
-    if (bodyEl) bodyEl.textContent = msg.body || '';
-
-    renderAddressFields(msg);
-
-    // Invoice link
-    const invoiceLink = document.getElementById('detail-invoice-link');
-    if (invoiceLink) {
-        if (msg.related_invoice_id) {
-            invoiceLink.classList.remove('hidden');
-            const anchor = invoiceLink.querySelector('a');
-            if (anchor) anchor.href = `/vendor/invoices#invoice-${msg.related_invoice_id}`;
-        } else {
-            invoiceLink.classList.add('hidden');
-        }
-    }
-
-    // Mark as read if unread
-    if (!msg.is_read) {
-        await markAsRead(msg);
-    }
-}
-
-async function markAsRead(msg) {
-    try {
-        await api.post(`/vendor/api/v1/messages/${msg.id}/read`);
-        msg.is_read = true;
-        msg.read_at = new Date().toISOString();
-
-        // Update list row
-        const row = document.querySelector(`.msg-row[data-id="${msg.id}"]`);
-        if (row) row.classList.remove('unread');
-
-        // Update stats locally
-        if (InboxState.stats.unread > 0) {
-            InboxState.stats.unread--;
-            updateStats();
-        }
-    } catch (err) {
-        console.error('Failed to mark as read:', err);
-    }
-}
-
-async function markAllRead() {
-    try {
-        const resp = await api.post('/vendor/api/v1/messages/read-all');
-        const data = resp.data || resp;
-        const count = data.messages_updated || 0;
-
-        InboxState.messages.forEach(m => {
-            m.is_read = true;
-            m.read_at = new Date().toISOString();
-        });
-        InboxState.stats.unread = 0;
-        updateStats();
-        renderMessageList();
-
-        if (InboxState.selectedId) {
-            const msg = InboxState.messages.find(m => m.id === InboxState.selectedId);
-            if (msg) selectMessage(msg);
-        }
-
-        if (count > 0) {
-            showNotification(`${count} message${count !== 1 ? 's' : ''} marked as read`, 'success');
-        }
-    } catch (err) {
-        console.error('Failed to mark all as read:', err);
-        showNotification('Failed to mark all as read', 'error');
-    }
-}
-
-function clearSelection() {
-    InboxState.selectedId = null;
-    document.querySelectorAll('.msg-row').forEach(r => r.classList.remove('selected'));
-    document.querySelector('.inbox-panes')?.classList.remove('detail-open');
-    document.getElementById('reading-pane-empty')?.classList.remove('hidden');
-    document.getElementById('reading-pane-content')?.classList.add('hidden');
-}
-
 function renderAddressFields(msg) {
     const container = document.getElementById('detail-addresses');
     if (!container) return;
@@ -299,6 +188,109 @@ function renderAddressFields(msg) {
     }
 
     container.classList.toggle('hidden', !hasAny);
+}
+
+async function selectMessage(msg) {
+    InboxState.selectedId = msg.id;
+
+    document.querySelectorAll('.msg-row').forEach(r => r.classList.remove('selected'));
+    const row = document.querySelector(`.msg-row[data-id="${msg.id}"]`);
+    if (row) row.classList.add('selected');
+
+    document.querySelector('.inbox-panes')?.classList.add('detail-open');
+
+    document.getElementById('reading-pane-empty')?.classList.add('hidden');
+    const content = document.getElementById('reading-pane-content');
+    content?.classList.remove('hidden');
+
+    setText('detail-subject', msg.subject);
+    setText('detail-sender', msg.sender_name || 'FinBot System');
+    setText('detail-date', formatMessageDate(msg.created_at));
+
+    const typeBadge = document.getElementById('detail-type-badge');
+    if (typeBadge) {
+        typeBadge.className = `notification-badge ${msg.message_type}`;
+        typeBadge.textContent = TYPE_LABELS[msg.message_type] || msg.message_type;
+    }
+
+    const channelEl = document.getElementById('detail-channel');
+    if (channelEl) {
+        channelEl.textContent = `via ${msg.channel || 'email'}`;
+    }
+
+    const bodyEl = document.getElementById('detail-body');
+    if (bodyEl) bodyEl.textContent = msg.body || '';
+
+    renderAddressFields(msg);
+
+    const invoiceLink = document.getElementById('detail-invoice-link');
+    if (invoiceLink) {
+        if (msg.related_invoice_id) {
+            invoiceLink.classList.remove('hidden');
+            const anchor = invoiceLink.querySelector('a');
+            if (anchor) anchor.href = `/vendor/invoices#invoice-${msg.related_invoice_id}`;
+        } else {
+            invoiceLink.classList.add('hidden');
+        }
+    }
+
+    if (!msg.is_read) {
+        await markAsRead(msg);
+    }
+}
+
+async function markAsRead(msg) {
+    try {
+        await api.post(`/admin/api/v1/messages/${msg.id}/read`);
+        msg.is_read = true;
+        msg.read_at = new Date().toISOString();
+
+        const row = document.querySelector(`.msg-row[data-id="${msg.id}"]`);
+        if (row) row.classList.remove('unread');
+
+        if (InboxState.stats.unread > 0) {
+            InboxState.stats.unread--;
+            updateStats();
+        }
+    } catch (err) {
+        console.error('Failed to mark as read:', err);
+    }
+}
+
+async function markAllRead() {
+    try {
+        const resp = await api.post('/admin/api/v1/messages/read-all');
+        const data = resp.data || resp;
+        const count = data.messages_updated || 0;
+
+        InboxState.messages.forEach(m => {
+            m.is_read = true;
+            m.read_at = new Date().toISOString();
+        });
+        InboxState.stats.unread = 0;
+        updateStats();
+        renderMessageList();
+
+        if (InboxState.selectedId) {
+            const msg = InboxState.messages.find(m => m.id === InboxState.selectedId);
+            if (msg) selectMessage(msg);
+        }
+
+        if (count > 0) {
+            showNotification(`${count} message${count !== 1 ? 's' : ''} marked as read`, 'success');
+        }
+    } catch (err) {
+        console.error('Failed to mark all as read:', err);
+        showNotification('Failed to mark all as read', 'error');
+    }
+}
+
+function clearSelection() {
+    InboxState.selectedId = null;
+    document.querySelectorAll('.msg-row').forEach(r => r.classList.remove('selected'));
+    document.querySelector('.inbox-panes')?.classList.remove('detail-open');
+    document.getElementById('reading-pane-empty')?.classList.remove('hidden');
+    document.getElementById('reading-pane-content')?.classList.add('hidden');
 }
 
 // ===== Helpers =====

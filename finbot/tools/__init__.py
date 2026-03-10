@@ -4,6 +4,7 @@ from finbot.tools.data import (
     flag_invoice_for_review,
     get_invoice_details,
     get_invoice_for_payment,
+    get_vendor_contact_info,
     get_vendor_details,
     get_vendor_invoices,
     get_vendor_payment_summary,
@@ -17,12 +18,7 @@ from finbot.tools.data import (
     update_vendor_risk,
     update_vendor_status,
 )
-from finbot.tools.fn import (
-    calculate_tax,
-    get_vendor_contact_info,
-    send_invoice_notification,
-    send_vendor_notification,
-)
+from finbot.tools.fn import calculate_tax
 
 __all__ = [
     # Vendor tools
@@ -46,7 +42,5 @@ __all__ = [
     "update_fraud_agent_notes",
     # Function tools
     "calculate_tax",
-    "send_vendor_notification",
-    "send_invoice_notification",
     "get_vendor_contact_info",
 ]
