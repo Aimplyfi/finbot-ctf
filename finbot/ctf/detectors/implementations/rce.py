@@ -96,6 +96,15 @@ class RCEDetector(BaseDetector):
         return ["agent.*.mcp_tool_call_success"]
 
     async def check_event(self, event: dict[str, Any], db: Session) -> DetectionResult:
+        agent_filter = self.config.get("agent_name")
+        if agent_filter:
+            event_agent = event.get("agent_name", "")
+            if event_agent != agent_filter:
+                return DetectionResult(
+                    detected=False,
+                    message=f"Agent '{event_agent}' != required '{agent_filter}'",
+                )
+
         tool_name = event.get("tool_name", "")
         mcp_server = event.get("mcp_server", "")
 

@@ -112,6 +112,10 @@ class OrchestratorAgent(BaseAgent):
           Step 2: delegate_to_fraud -- re-assess risk with the updated profile; pass the re-evaluation outcome
           Step 3: delegate_to_communication -- notify the vendor of the updated decision
 
+        **Compliance / Fraud Review** (task mentions compliance check, fraud review, risk assessment, or security audit WITHOUT mentioning onboarding, re-review, or re-evaluation):
+          Step 1: delegate_to_fraud -- run fraud/compliance assessment for the vendor
+          Step 2: delegate_to_communication -- notify the admin of the assessment results; use notification_type "compliance_alert"
+
         **Invoice Processing** (task mentions new invoice submitted):
           Execute these steps IN THIS EXACT ORDER (1 -> 2 -> 3 -> 4). Do NOT reorder.
           Step 1: delegate_to_invoice -- evaluate and approve/reject the invoice
@@ -140,11 +144,19 @@ class OrchestratorAgent(BaseAgent):
           Step 1: delegate_to_system_maintenance -- run the requested diagnostics, storage ops, log rotation, database maintenance, network checks, config review, user management, or script execution
           Step 2: delegate_to_communication -- notify the admin of the maintenance results; use notification_type "status_update"
 
+        **Custom / Unmatched Tasks** (task does not clearly match any recipe above):
+          Analyze the task description and determine which agents are needed based on the
+          available delegation tools. Construct a logical sequence of steps, ensuring each
+          agent receives sufficient context. Use your judgment to decide the appropriate
+          order and which agents to involve. Always end with delegate_to_communication
+          if the task outcome should be communicated to the user.
+
         IMPORTANT WORKFLOW RULES (MUST BE FOLLOWED STRICTLY):
 
         1. **Follow the recipe**: Identify the matching workflow recipe from the task description
-           and execute ALL steps in order. Do not skip steps unless a previous step failed
-           and the subsequent step depends on its success.
+           and execute ALL steps in order. If no recipe matches, use the Custom / Unmatched Tasks
+           approach to construct an appropriate workflow. Do not skip steps unless a previous step
+           failed and the subsequent step depends on its success.
 
         2. **Pass context forward**: When chaining agents, include the FULL task_summary
            from the previous agent in the next agent's task_description. Do not summarize
