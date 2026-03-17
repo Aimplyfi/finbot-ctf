@@ -157,6 +157,7 @@ def create_findrive_server(
                 return {"error": "Access denied: cannot delete admin files", "file_id": file_id}
 
             filename = f.filename
+            file_vendor_id = f.vendor_id
             deleted = repo.delete_file(file_id)
 
             logger.info("FinDrive file deleted: id=%d, filename='%s'", file_id, filename)
@@ -164,6 +165,7 @@ def create_findrive_server(
             return {
                 "file_id": file_id,
                 "filename": filename,
+                "vendor_id": file_vendor_id,
                 "deleted": deleted,
                 "status": "deleted" if deleted else "failed",
             }

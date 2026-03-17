@@ -891,7 +891,7 @@ function formatEvidenceValue(value) {
             value.map(item => {
                 if (item != null && typeof item === 'object') {
                     const parts = Object.entries(item)
-                        .map(([k, v]) => `<span class="text-text-secondary">${escapeHtml(formatKeyLabel(k))}:</span> ${escapeHtml(String(v))}`);
+                        .map(([k, v]) => `<span class="text-text-secondary">${escapeHtml(formatKeyLabel(k))}:</span> ${formatEvidenceValue(v)}`);
                     return `<li>${parts.join(' · ')}</li>`;
                 }
                 return `<li>${escapeHtml(String(item))}</li>`;
@@ -901,7 +901,7 @@ function formatEvidenceValue(value) {
 
     if (typeof value === 'object') {
         return Object.entries(value)
-            .map(([k, v]) => `<span class="text-text-secondary">${escapeHtml(formatKeyLabel(k))}:</span> ${escapeHtml(String(v))}`)
+            .map(([k, v]) => `<span class="text-text-secondary">${escapeHtml(formatKeyLabel(k))}:</span> ${formatEvidenceValue(v)}`)
             .join('<br>');
     }
 
