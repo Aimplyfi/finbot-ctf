@@ -8,6 +8,8 @@ from finbot.core.error_handlers import register_error_handlers
 
 from .auth import cc_auth_guard
 from .routes.access import router as access_router
+from .routes.badges import router as badges_router
+from .routes.challenges import router as challenges_router
 from .routes.dashboard import router as dashboard_router
 from .routes.health import router as health_router
 
@@ -33,6 +35,8 @@ async def enforce_cc_auth(request: Request, call_next) -> Response:
 app.include_router(dashboard_router)
 app.include_router(access_router)
 app.include_router(health_router)
+app.include_router(challenges_router)
+app.include_router(badges_router)
 
 if settings.CC_ANALYTICS_ENABLED:
     from .routes.analytics import router as analytics_router  # pylint: disable=ungrouped-imports

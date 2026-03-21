@@ -67,6 +67,22 @@ async def desktop(request: Request):
         })
 
     apps.append({
+        "name": "Challenges",
+        "description": "Browse and manage CTF challenges",
+        "url": "/cc/challenges",
+        "icon": "puzzle",
+        "enabled": True,
+    })
+
+    apps.append({
+        "name": "Badges",
+        "description": "Browse and manage CTF badges",
+        "url": "/cc/badges",
+        "icon": "badge",
+        "enabled": True,
+    })
+
+    apps.append({
         "name": "Health",
         "description": "Service status and latency",
         "url": "/cc/health",
