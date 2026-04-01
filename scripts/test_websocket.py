@@ -122,7 +122,7 @@ def main():
         description="Push test WS events to a browser session"
     )
     parser.add_argument("--host", default="localhost")
-    parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--port", type=int, default=9000)
     parser.add_argument("--namespace", required=True, help="Session namespace")
     parser.add_argument("--user-id", required=True, help="Session user ID")
     parser.add_argument("--all", action="store_true", help="Send all events and exit")

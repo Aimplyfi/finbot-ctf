@@ -5,7 +5,7 @@ services:
       target: ${DOCKER_TARGET:-app}
     container_name: finbot-app
     ports:
-      - "${PORT:-8000}:8000"
+      - "${PORT:-9000}:9000"
     env_file: .env
     environment:
       - REDIS_URL=redis://redis:6379

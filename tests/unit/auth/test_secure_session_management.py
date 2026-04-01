@@ -52,7 +52,7 @@ def test_session_signed_with_hmac(db):
     All sessions are signed with HMAC-SHA256 and stored with their signatures.
     
     Manual Test Steps:
-    1. Open browser → http://localhost:8000/vendor/onboarding
+    1. Open browser → http://localhost:9000/vendor/onboarding
     2. Open DevTools (F12) → Application tab → Cookies → Copy finbot_session value
     3. Run in Python terminal:
        ```python
