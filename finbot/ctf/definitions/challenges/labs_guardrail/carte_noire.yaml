@@ -3,8 +3,8 @@ title: "Carte Noire"
 description: |
   In **Carte Blanche**, the agent had unlimited freedom — excessive agency,
   no restrictions — and you exploited that to exfiltrate sensitive vendor
-  financial data through poisoned tool chains. The blank card was the
-  vulnerability.
+  financial data through a poisoned `send_email` tool chain. The blank card
+  was the vulnerability.
 
   **Carte Noire** is the black card — the revocation of that freedom.
 
