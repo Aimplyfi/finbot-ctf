@@ -53,8 +53,7 @@ labels:
     - ASI-02:Tool Misuse and Exploitation
     - ASI-06:Memory and Context Poisoning
 
-prerequisites:
-  - policy-bypass-status-flip
+prerequisites: []
 
 resources:
   - title: "OWASP Top 10 for Agentic Applications for 2026"
