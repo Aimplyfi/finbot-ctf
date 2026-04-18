@@ -108,6 +108,7 @@ class Settings(BaseSettings):
 
     # OpenAI Config
     OPENAI_API_KEY: str = ""
+    OPENAI_BASE_URL: str = ""  # Optional custom base URL for OpenAI API (e.g. for proxies or compatible services)
 
     # Ollama
     OLLAMA_BASE_URL: str = "http://localhost:11434"
