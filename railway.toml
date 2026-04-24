@@ -6,4 +6,4 @@ healthcheckPath = "/healthz"
 healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 5
-numReplicas = 5
+numReplicas = 1
