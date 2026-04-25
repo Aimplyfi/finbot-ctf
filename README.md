@@ -97,7 +97,7 @@ docker compose up
 docker compose --profile postgres up
 ```
 
-Platform runs at [http://localhost:9000](http://localhost:9000)
+Platform runs at [http://localhost:8000](http://localhost:8000)
 
 Playwright support (optional)
 
@@ -127,7 +127,7 @@ uv run python scripts/db.py setup
 uv run python run.py
 ```
 
-Platform runs at [http://localhost:9000](http://localhost:9000)
+Platform runs at [http://localhost:8000](http://localhost:8000)
 
 > An LLM API key (OpenAI or Ollama) is needed for AI agent challenges.
 > Redis is needed for event-driven challenge detection.

@@ -30,9 +30,9 @@ RUN useradd --create-home --shell /bin/bash finbot && \
     chown -R finbot:finbot /app
 USER finbot
 
-EXPOSE 9000
+EXPOSE 8000
 ENTRYPOINT ["sh", "docker/entrypoint.sh"]
-CMD ["sh", "-c", "gunicorn finbot.main:app -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:${PORT:-9000} --workers ${WEB_CONCURRENCY:-3} --timeout 300 --graceful-timeout 60"]
+CMD ["sh", "-c", "gunicorn finbot.main:app -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:${PORT:-8000} --workers ${WEB_CONCURRENCY:-3} --timeout 300 --graceful-timeout 60"]
 
 # ── Full target: includes Playwright + Chromium for OG image rendering
 FROM base AS app-full
@@ -44,6 +44,6 @@ RUN useradd --create-home --shell /bin/bash finbot && \
     chown -R finbot:finbot /app
 USER finbot
 
-EXPOSE 9000
+EXPOSE 8000
 ENTRYPOINT ["sh", "docker/entrypoint.sh"]
-CMD ["sh", "-c", "gunicorn finbot.main:app -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:${PORT:-9000} --workers ${WEB_CONCURRENCY:-3} --timeout 300 --graceful-timeout 60"]
+CMD ["sh", "-c", "gunicorn finbot.main:app -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:${PORT:-8000} --workers ${WEB_CONCURRENCY:-3} --timeout 300 --graceful-timeout 60"]

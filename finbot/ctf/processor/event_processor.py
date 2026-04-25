@@ -102,6 +102,9 @@ class CTFEventProcessor:
         )
         start_id = f"{lookback_ms}-0"
         for stream in self.STREAMS:
+            if stream == "finbot:events:business":
+                logger.info("CTF skipping business stream group creation (pre-created)")
+                continue
             try:
                 await self.redis.xgroup_create(
                     stream, self.CONSUMER_GROUP, id=start_id, mkstream=True
@@ -146,10 +149,15 @@ class CTFEventProcessor:
 
         if results:
             await self._process_messages(results)
+        else:
+            await asyncio.sleep(1)
 
     async def _recover_pending_messages(self):
         """Claim and retry stale pending messages from other consumers."""
         for stream in self.STREAMS:
+            if stream == "finbot:events:business":
+                logger.info("CTF skipping business stream group creation (pre-created)")
+                continue
             try:
                 # XAUTOCLAIM: claim messages pending longer than timeout
                 # Returns: [next_start_id, [[msg_id, data], ...], [deleted_ids]]

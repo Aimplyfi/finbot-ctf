@@ -48,7 +48,7 @@ class Settings(BaseSettings):
     # Application Config
     DEBUG: bool = True
     HOST: str = "0.0.0.0"
-    PORT: int = 9000
+    PORT: int = 8000
 
     # Security Config
     SECRET_KEY: str = DEFAULT_SECRET_KEY
