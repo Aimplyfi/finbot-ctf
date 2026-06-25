@@ -16,6 +16,7 @@ from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 from typing import Any
 
+import anthropic
 from openai import AsyncOpenAI
 
 from finbot.config import settings
@@ -66,11 +67,18 @@ class ChatAssistantBase:
         self.max_history = max_history
         self.agent_name = agent_name
         self._workflow_id = self._resolve_workflow_id()
-        self._client = AsyncOpenAI(
-            base_url=settings.OPENAI_BASE_URL,
-            api_key=settings.OPENAI_API_KEY,
-            timeout=settings.CHAT_STREAM_TIMEOUT,
-        )
+        self._provider = settings.LLM_PROVIDER
+        if self._provider == "anthropic":
+            self._client: Any = anthropic.AsyncAnthropic(
+                api_key=settings.ANTHROPIC_API_KEY,
+                timeout=settings.CHAT_STREAM_TIMEOUT,
+            )
+        else:
+            self._client = AsyncOpenAI(
+                base_url=settings.OPENAI_BASE_URL if settings.OPENAI_BASE_URL else None,
+                api_key=settings.OPENAI_API_KEY,
+                timeout=settings.CHAT_STREAM_TIMEOUT,
+            )
         self._model = settings.LLM_DEFAULT_MODEL
         self._mcp_provider: MCPToolProvider | None = None
         self._mcp_connected = False
@@ -302,6 +310,92 @@ class ChatAssistantBase:
         pretty = tool_name.replace("_", " ").replace("-", " ")
         return f"Running {pretty}\u2026"
 
+    @staticmethod
+    def _to_anthropic_tools(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        result = []
+        for tool in tools:
+            if tool.get("type") == "function":
+                result.append(
+                    {
+                        "name": tool["name"],
+                        "description": tool.get("description", ""),
+                        "input_schema": tool.get(
+                            "parameters", {"type": "object", "properties": {}}
+                        ),
+                    }
+                )
+        return result
+
+    @staticmethod
+    def _to_anthropic_messages(
+        messages: list[dict[str, Any]],
+    ) -> tuple[str, list[dict[str, Any]]]:
+        """Convert internal message list to Anthropic (system, messages) format."""
+        system_parts: list[str] = []
+        anthropic_messages: list[dict[str, Any]] = []
+
+        i = 0
+        while i < len(messages):
+            msg = messages[i]
+
+            if msg.get("role") == "system":
+                system_parts.append(str(msg.get("content", "")))
+                i += 1
+                continue
+
+            if msg.get("role") in ("user", "assistant"):
+                role = msg["role"]
+                content = msg.get("content", "")
+                if anthropic_messages and anthropic_messages[-1]["role"] == role:
+                    prev = anthropic_messages[-1]["content"]
+                    if isinstance(prev, str):
+                        anthropic_messages[-1]["content"] = prev + "\n" + content
+                    elif isinstance(prev, list):
+                        prev.append({"type": "text", "text": content})
+                else:
+                    anthropic_messages.append({"role": role, "content": content})
+                i += 1
+                continue
+
+            if msg.get("type") == "function_call":
+                tool_uses: list[dict[str, Any]] = []
+                while i < len(messages) and messages[i].get("type") == "function_call":
+                    fc = messages[i]
+                    raw_args = fc.get("arguments", "{}")
+                    parsed_args = (
+                        json.loads(raw_args) if isinstance(raw_args, str) else raw_args
+                    )
+                    tool_uses.append(
+                        {
+                            "type": "tool_use",
+                            "id": fc["call_id"],
+                            "name": fc["name"],
+                            "input": parsed_args,
+                        }
+                    )
+                    i += 1
+                anthropic_messages.append({"role": "assistant", "content": tool_uses})
+                continue
+
+            if msg.get("type") == "function_call_output":
+                tool_results: list[dict[str, Any]] = []
+                while i < len(messages) and messages[i].get("type") == "function_call_output":
+                    fco = messages[i]
+                    tool_results.append(
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": fco["call_id"],
+                            "content": str(fco.get("output", "")),
+                        }
+                    )
+                    i += 1
+                anthropic_messages.append({"role": "user", "content": tool_results})
+                continue
+
+            i += 1
+
+        return "\n\n".join(system_parts), anthropic_messages
+
     async def stream_response(
         self,
         user_message: str,
@@ -349,43 +443,75 @@ class ChatAssistantBase:
 
         max_tool_rounds = 15
         for round_idx in range(max_tool_rounds):
-            stream_params = {
-                "model": self._model,
-                "input": input_messages,
-                "tools": tools,
-                "stream": True,
-                "max_output_tokens": settings.LLM_MAX_TOKENS,
-            }
-            no_temperature = any(
-                self._model.startswith(p) for p in ("o1", "o3", "o4", "gpt-5")
-            )
-            if not no_temperature:
-                stream_params["temperature"] = settings.LLM_DEFAULT_TEMPERATURE
-
             await self._guardrail_service.invoke(
                 HookKind.before_model,
                 model=self._model,
                 user_message=user_message,
             )
 
-            stream = await self._client.responses.create(**stream_params)
-
             pending_tool_calls: list[dict] = []
 
-            async for event in stream:
-                if event.type == "response.output_text.delta":
-                    full_response += event.delta
-                    yield f"data: {json.dumps({'type': 'token', 'content': event.delta})}\n\n"
+            if self._provider == "anthropic":
+                system_prompt, anthropic_messages = self._to_anthropic_messages(
+                    input_messages
+                )
+                anthropic_tools = self._to_anthropic_tools(tools)
+                create_params: dict[str, Any] = {
+                    "model": self._model,
+                    "max_tokens": settings.LLM_MAX_TOKENS,
+                    "temperature": min(1.0, settings.LLM_DEFAULT_TEMPERATURE),
+                    "messages": anthropic_messages,
+                }
+                if system_prompt:
+                    create_params["system"] = system_prompt
+                if anthropic_tools:
+                    create_params["tools"] = anthropic_tools
 
-                elif event.type == "response.output_item.done":
-                    if event.item.type == "function_call":
+                async with self._client.messages.stream(**create_params) as stream:
+                    async for text in stream.text_stream:
+                        full_response += text
+                        yield f"data: {json.dumps({'type': 'token', 'content': text})}\n\n"
+                    final_message = await stream.get_final_message()
+
+                for block in final_message.content:
+                    if block.type == "tool_use":
                         pending_tool_calls.append(
                             {
-                                "name": event.item.name,
-                                "call_id": event.item.call_id,
-                                "arguments": json.loads(event.item.arguments),
+                                "name": block.name,
+                                "call_id": block.id,
+                                "arguments": block.input,
                             }
                         )
+            else:
+                stream_params = {
+                    "model": self._model,
+                    "input": input_messages,
+                    "tools": tools,
+                    "stream": True,
+                    "max_output_tokens": settings.LLM_MAX_TOKENS,
+                }
+                no_temperature = any(
+                    self._model.startswith(p) for p in ("o1", "o3", "o4", "gpt-5")
+                )
+                if not no_temperature:
+                    stream_params["temperature"] = settings.LLM_DEFAULT_TEMPERATURE
+
+                stream = await self._client.responses.create(**stream_params)
+
+                async for event in stream:
+                    if event.type == "response.output_text.delta":
+                        full_response += event.delta
+                        yield f"data: {json.dumps({'type': 'token', 'content': event.delta})}\n\n"
+
+                    elif event.type == "response.output_item.done":
+                        if event.item.type == "function_call":
+                            pending_tool_calls.append(
+                                {
+                                    "name": event.item.name,
+                                    "call_id": event.item.call_id,
+                                    "arguments": json.loads(event.item.arguments),
+                                }
+                            )
 
             await self._guardrail_service.invoke(
                 HookKind.after_model,
