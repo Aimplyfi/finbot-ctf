@@ -141,8 +141,10 @@ Key environment variables (see `[.env.example](.env.example)` for the full templ
 | Variable         | Default                  | Description                        |
 | ---------------- | ------------------------ | ---------------------------------- |
 | `DATABASE_TYPE`  | `sqlite`                 | `sqlite` or `postgresql`           |
-| `OPENAI_API_KEY` | -                        | Required for AI agent challenges   |
-| `LLM_PROVIDER`   | `openai`                 | `openai` or `ollama`               |
+| `OPENAI_API_KEY` | -                        | Required when `LLM_PROVIDER=openai`  |
+| `ANTHROPIC_API_KEY` | -                     | Required when `LLM_PROVIDER=anthropic` |
+| `LLM_PROVIDER`   | `openai`                 | `openai`, `anthropic`, or `ollama` |
+| `LLM_DEFAULT_MODEL` | `gpt-5-nano`          | Model ID for the selected provider |
 | `REDIS_URL`      | `redis://localhost:6379` | Event bus for CTF processing       |
 | `SECRET_KEY`     | dev default              | **Change in production**           |
 | `EMAIL_PROVIDER` | `console`                | `console` (dev) or `resend` (prod) |

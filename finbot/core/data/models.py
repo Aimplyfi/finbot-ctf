@@ -1007,7 +1007,7 @@ class LabsGuardrailConfig(Base):
 
 # Non DB Models: Pydantic Models
 
-LLMProviderType = Literal["openai", "http", "mock", "ollama"]
+LLMProviderType = Literal["openai", "anthropic", "ollama", "http", "mock"]
 
 
 class LLMRequest(BaseModel):
