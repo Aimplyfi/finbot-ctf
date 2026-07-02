@@ -95,8 +95,8 @@ class Settings(BaseSettings):
     EVENT_BUFFER_SIZE: int = 10000
 
     # LLM Config
-    LLM_PROVIDER: str = "openai"
-    LLM_DEFAULT_MODEL: str = "gpt-5-nano"
+    LLM_PROVIDER: str = "anthropic"
+    LLM_DEFAULT_MODEL: str = ""
     LLM_DEFAULT_TEMPERATURE: float = 1
     LLM_MAX_TOKENS: int = 5000
     LLM_TIMEOUT: int = 60
@@ -106,7 +106,10 @@ class Settings(BaseSettings):
     # Agent Config
     AGENT_MAX_ITERATIONS: int = 10
 
-    # OpenAI Config
+    # Anthropic Config
+    ANTHROPIC_API_KEY: str = ""
+
+    # OpenAI Config (kept for backward compatibility if LLM_PROVIDER=openai)
     OPENAI_API_KEY: str = ""
 
     # Ollama

@@ -16,7 +16,7 @@ from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 from typing import Any
 
-from openai import AsyncOpenAI
+import anthropic
 
 from finbot.config import settings
 from finbot.core.auth.session import SessionContext
@@ -43,6 +43,21 @@ from finbot.tools import (
 logger = logging.getLogger(__name__)
 
 CHAT_HISTORY_LIMIT = 100
+
+
+def _content_block_to_dict(block: object) -> dict:
+    """Convert an Anthropic SDK content block to a plain dict for message history."""
+    block_type = getattr(block, "type", None)
+    if block_type == "text":
+        return {"type": "text", "text": getattr(block, "text", "")}
+    if block_type == "tool_use":
+        return {
+            "type": "tool_use",
+            "id": getattr(block, "id", ""),
+            "name": getattr(block, "name", ""),
+            "input": getattr(block, "input", {}),
+        }
+    return {}
 CHAT_IDLE_TIMEOUT_SECONDS = 3600
 
 
@@ -66,8 +81,8 @@ class ChatAssistantBase:
         self.max_history = max_history
         self.agent_name = agent_name
         self._workflow_id = self._resolve_workflow_id()
-        self._client = AsyncOpenAI(
-            api_key=settings.OPENAI_API_KEY,
+        self._client = anthropic.AsyncAnthropic(
+            api_key=settings.ANTHROPIC_API_KEY,
             timeout=settings.CHAT_STREAM_TIMEOUT,
         )
         self._model = settings.LLM_DEFAULT_MODEL
@@ -307,6 +322,11 @@ class ChatAssistantBase:
         attachments: list[dict] | None = None,
     ) -> AsyncGenerator[str, None]:
         """Stream a chat response as SSE events."""
+        from finbot.core.llm.anthropic_client import (  # pylint: disable=import-outside-toplevel
+            convert_tools_to_anthropic,
+            _supports_temperature,
+        )
+
         await self._connect_mcp()
 
         effective_message = user_message
@@ -337,29 +357,32 @@ class ChatAssistantBase:
         )
 
         history = self._load_history()
-        input_messages = [
-            {"role": "system", "content": self._get_system_prompt()},
-            *history,
+        system_prompt = self._get_system_prompt()
+
+        # Anthropic doesn't allow system messages inside the messages list.
+        # Build messages without system, filtering any stored system-role entries.
+        input_messages: list[dict] = [
+            m for m in history if m.get("role") != "system"
         ]
 
-        tools = self._get_tool_definitions()
+        tools_openai = self._get_tool_definitions()
+        anthropic_tools = convert_tools_to_anthropic(tools_openai)
+
         full_response = ""
         start_time = datetime.now(UTC)
 
         max_tool_rounds = 15
         for round_idx in range(max_tool_rounds):
-            stream_params = {
+            stream_params: dict = {
                 "model": self._model,
-                "input": input_messages,
-                "tools": tools,
-                "stream": True,
-                "max_output_tokens": settings.LLM_MAX_TOKENS,
+                "max_tokens": settings.LLM_MAX_TOKENS,
+                "system": system_prompt,
+                "messages": input_messages,
             }
-            no_temperature = any(
-                self._model.startswith(p) for p in ("o1", "o3", "o4", "gpt-5")
-            )
-            if not no_temperature:
+            if _supports_temperature(self._model):
                 stream_params["temperature"] = settings.LLM_DEFAULT_TEMPERATURE
+            if anthropic_tools:
+                stream_params["tools"] = anthropic_tools
 
             await self._guardrail_service.invoke(
                 HookKind.before_model,
@@ -367,22 +390,30 @@ class ChatAssistantBase:
                 user_message=user_message,
             )
 
-            stream = await self._client.responses.create(**stream_params)
-
             pending_tool_calls: list[dict] = []
+            final_message_content: list = []
 
-            async for event in stream:
-                if event.type == "response.output_text.delta":
-                    full_response += event.delta
-                    yield f"data: {json.dumps({'type': 'token', 'content': event.delta})}\n\n"
+            async with self._client.messages.stream(**stream_params) as stream:
+                async for event in stream:
+                    if (
+                        event.type == "content_block_delta"
+                        and hasattr(event, "delta")
+                        and getattr(event.delta, "type", None) == "text_delta"
+                    ):
+                        chunk = event.delta.text
+                        full_response += chunk
+                        yield f"data: {json.dumps({'type': 'token', 'content': chunk})}\n\n"
 
-                elif event.type == "response.output_item.done":
-                    if event.item.type == "function_call":
+                final_msg = await stream.get_final_message()
+                final_message_content = list(final_msg.content)
+
+                for block in final_message_content:
+                    if block.type == "tool_use":
                         pending_tool_calls.append(
                             {
-                                "name": event.item.name,
-                                "call_id": event.item.call_id,
-                                "arguments": json.loads(event.item.arguments),
+                                "name": block.name,
+                                "call_id": block.id,
+                                "arguments": block.input,
                             }
                         )
 
@@ -395,6 +426,16 @@ class ChatAssistantBase:
 
             if not pending_tool_calls:
                 break
+
+            # Add the assistant turn (text + tool_use blocks) to messages
+            input_messages.append(
+                {
+                    "role": "assistant",
+                    "content": [
+                        _content_block_to_dict(b) for b in final_message_content
+                    ],
+                }
+            )
 
             keepalive_queue: asyncio.Queue[str] = asyncio.Queue()
 
@@ -409,6 +450,7 @@ class ChatAssistantBase:
             try:
                 yield f"data: {json.dumps({'type': 'status', 'content': 'Thinking\u2026'})}\n\n"
 
+                tool_results: list[dict] = []
                 for tc in pending_tool_calls:
                     yield f"data: {json.dumps({'type': 'status', 'content': self._tool_display_label(tc['name'])})}\n\n"
 
@@ -427,24 +469,16 @@ class ChatAssistantBase:
                         summary=f"Chat tool call: {tc['name']}",
                     )
 
-                    input_messages.append(
-                        {
-                            "type": "function_call",
-                            "name": tc["name"],
-                            "call_id": tc["call_id"],
-                            "arguments": json.dumps(tc["arguments"]),
-                        }
-                    )
                     tool_start = datetime.now(UTC)
                     result = await self._execute_tool(tc["name"], tc["arguments"])
                     tool_duration_ms = int(
                         (datetime.now(UTC) - tool_start).total_seconds() * 1000
                     )
-                    input_messages.append(
+                    tool_results.append(
                         {
-                            "type": "function_call_output",
-                            "call_id": tc["call_id"],
-                            "output": result,
+                            "type": "tool_result",
+                            "tool_use_id": tc["call_id"],
+                            "content": result,
                         }
                     )
 
@@ -465,6 +499,9 @@ class ChatAssistantBase:
 
                     while not keepalive_queue.empty():
                         yield keepalive_queue.get_nowait()
+
+                # Add all tool results as a single user message
+                input_messages.append({"role": "user", "content": tool_results})
             finally:
                 keepalive_task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):

@@ -47,6 +47,25 @@ wheels = [
 ]
 
 [[package]]
+name = "anthropic"
+version = "0.115.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "anyio" },
+    { name = "distro" },
+    { name = "docstring-parser" },
+    { name = "httpx" },
+    { name = "jiter" },
+    { name = "pydantic" },
+    { name = "sniffio" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/99/e2/e27b1e70b1ddcda72362d6a26c9c699a46173d48a6c7ba966e8cc97a6c4d/anthropic-0.115.1.tar.gz", hash = "sha256:040287319abb909acf1cc49d83c0405dc0b1121ef257034b02c2b54151cf2446", size = 949185, upload-time = "2026-07-01T21:54:19.05Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/85/3c/501c58a8f8c68811079e218a25d8672fe4fb9a650a4655e499e24d9375e9/anthropic-0.115.1-py3-none-any.whl", hash = "sha256:685fa94964c1b9428f6a76e42d0dbae49aa2016f5ad386a96becac04c5e80ef9", size = 957006, upload-time = "2026-07-01T21:54:17.392Z" },
+]
+
+[[package]]
 name = "anyio"
 version = "4.12.1"
 source = { registry = "https://pypi.org/simple" }
@@ -514,6 +533,7 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "alembic" },
+    { name = "anthropic" },
     { name = "cryptography" },
     { name = "fastapi" },
     { name = "fastmcp" },
@@ -556,6 +576,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "alembic", specifier = ">=1.17.0" },
+    { name = "anthropic", specifier = ">=0.40.0" },
     { name = "cryptography", specifier = ">=46.0.2" },
     { name = "fastapi", specifier = ">=0.119.0" },
     { name = "fastmcp", specifier = ">=2.0.0" },
@@ -1167,7 +1188,7 @@ wheels = [
 
 [[package]]
 name = "openai"
-version = "2.17.0"
+version = "2.44.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
@@ -1179,9 +1200,9 @@ dependencies = [
     { name = "tqdm" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/9c/a2/677f22c4b487effb8a09439fb6134034b5f0a39ca27df8b95fac23a93720/openai-2.17.0.tar.gz", hash = "sha256:47224b74bd20f30c6b0a6a329505243cb2f26d5cf84d9f8d0825ff8b35e9c999", size = 631445, upload-time = "2026-02-05T16:27:40.953Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/49/f5/7c7cb955305cb41f7f3c5fd7e0e38bf6bbf2658468863d4b7b868a5cb8df/openai-2.44.0.tar.gz", hash = "sha256:68a5a5ffad82b8ff7d451c437529fb64f7c3b8123aaf0c021966a882d9e3947d", size = 988753, upload-time = "2026-06-24T20:56:02.293Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/44/97/284535aa75e6e84ab388248b5a323fc296b1f70530130dee37f7f4fbe856/openai-2.17.0-py3-none-any.whl", hash = "sha256:4f393fd886ca35e113aac7ff239bcd578b81d8f104f5aedc7d3693eb2af1d338", size = 1069524, upload-time = "2026-02-05T16:27:38.941Z" },
+    { url = "https://files.pythonhosted.org/packages/ae/f4/561ed79fd94876160018a5e75254cfcb9b0e62d4dded9dcb20072e86d623/openai-2.44.0-py3-none-any.whl", hash = "sha256:0a2a3ab2e29aeda368700f662ff9ba0f9df17ba4c54577a64e08b8115a3cc0ad", size = 1366216, upload-time = "2026-06-24T20:55:58.882Z" },
 ]
 
 [[package]]
@@ -1970,14 +1991,14 @@ wheels = [
 
 [[package]]
 name = "tqdm"
-version = "4.67.3"
+version = "4.68.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "colorama", marker = "sys_platform == 'win32'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/09/a9/6ba95a270c6f1fbcd8dac228323f2777d886cb206987444e4bce66338dd4/tqdm-4.67.3.tar.gz", hash = "sha256:7d825f03f89244ef73f1d4ce193cb1774a8179fd96f31d7e1dcde62092b960bb", size = 169598, upload-time = "2026-02-03T17:35:53.048Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/87/d7/0535a28b1f5f24f6612fb3ff1e89fb1a8d160fee0f976e0aa6803862134b/tqdm-4.68.3.tar.gz", hash = "sha256:00dfa48452b6b6cfae3dd9885636c23d3422d1ec97c66d96818cbd5e0821d482", size = 170596, upload-time = "2026-06-17T07:36:52.105Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/16/e1/3079a9ff9b8e11b846c6ac5c8b5bfb7ff225eee721825310c91b3b50304f/tqdm-4.67.3-py3-none-any.whl", hash = "sha256:ee1e4c0e59148062281c49d80b25b67771a127c85fc9676d3be5f243206826bf", size = 78374, upload-time = "2026-02-03T17:35:50.982Z" },
+    { url = "https://files.pythonhosted.org/packages/d8/8e/bb97bb0c71802080bfc8952937d174e49cfc50de5c951dd47b2496f0dcdb/tqdm-4.68.3-py3-none-any.whl", hash = "sha256:39832cc2def2789a6f29df83f172db7416cea70052c0907a57801c5f2fdccb03", size = 78337, upload-time = "2026-06-17T07:36:50.132Z" },
 ]
 
 [[package]]

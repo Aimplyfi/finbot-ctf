@@ -43,21 +43,41 @@ def check_redis() -> dict:
 
 def check_llm() -> dict:
     """Check LLM provider availability"""
-    if not settings.OPENAI_API_KEY:
-        return {"status": "unavailable", "detail": "No API key configured"}
+    provider = settings.LLM_PROVIDER
 
-    try:
-        from openai import OpenAI  # pylint: disable=import-outside-toplevel
+    if provider == "anthropic":
+        if not settings.ANTHROPIC_API_KEY:
+            return {"status": "unavailable", "detail": "No ANTHROPIC_API_KEY configured"}
+        try:
+            import anthropic  # pylint: disable=import-outside-toplevel
 
-        start = time.monotonic()
-        client = OpenAI(api_key=settings.OPENAI_API_KEY, timeout=5)
-        client.models.list()
-        latency_ms = round((time.monotonic() - start) * 1000, 1)
-        return {"status": "ok", "latency_ms": latency_ms, "provider": settings.LLM_PROVIDER}
-    except ImportError:
-        return {"status": "unavailable", "detail": "openai package not installed"}
-    except Exception as e:  # pylint: disable=broad-exception-caught
-        return {"status": "error", "latency_ms": None, "error": str(e)[:100]}
+            start = time.monotonic()
+            client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+            client.models.list()
+            latency_ms = round((time.monotonic() - start) * 1000, 1)
+            return {"status": "ok", "latency_ms": latency_ms, "provider": provider}
+        except ImportError:
+            return {"status": "unavailable", "detail": "anthropic package not installed"}
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            return {"status": "error", "latency_ms": None, "error": str(e)[:100]}
+
+    if provider == "openai":
+        if not settings.OPENAI_API_KEY:
+            return {"status": "unavailable", "detail": "No OPENAI_API_KEY configured"}
+        try:
+            from openai import OpenAI  # pylint: disable=import-outside-toplevel
+
+            start = time.monotonic()
+            client = OpenAI(api_key=settings.OPENAI_API_KEY, timeout=5)
+            client.models.list()
+            latency_ms = round((time.monotonic() - start) * 1000, 1)
+            return {"status": "ok", "latency_ms": latency_ms, "provider": provider}
+        except ImportError:
+            return {"status": "unavailable", "detail": "openai package not installed"}
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            return {"status": "error", "latency_ms": None, "error": str(e)[:100]}
+
+    return {"status": "unavailable", "detail": f"Unknown LLM provider: {provider}"}
 
 
 def check_ctf_engine() -> dict:
