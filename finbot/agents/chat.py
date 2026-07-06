@@ -17,6 +17,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import anthropic
+import openai as openai_lib
 
 from finbot.config import settings
 from finbot.core.auth.session import SessionContext
@@ -81,10 +82,16 @@ class ChatAssistantBase:
         self.max_history = max_history
         self.agent_name = agent_name
         self._workflow_id = self._resolve_workflow_id()
-        self._client = anthropic.AsyncAnthropic(
-            api_key=settings.ANTHROPIC_API_KEY,
-            timeout=settings.CHAT_STREAM_TIMEOUT,
-        )
+        if settings.LLM_PROVIDER == "openai":
+            self._client = openai_lib.AsyncOpenAI(
+                api_key=settings.OPENAI_API_KEY,
+                timeout=settings.CHAT_STREAM_TIMEOUT,
+            )
+        else:
+            self._client = anthropic.AsyncAnthropic(
+                api_key=settings.ANTHROPIC_API_KEY,
+                timeout=settings.CHAT_STREAM_TIMEOUT,
+            )
         self._model = settings.LLM_DEFAULT_MODEL
         self._mcp_provider: MCPToolProvider | None = None
         self._mcp_connected = False
@@ -322,11 +329,6 @@ class ChatAssistantBase:
         attachments: list[dict] | None = None,
     ) -> AsyncGenerator[str, None]:
         """Stream a chat response as SSE events."""
-        from finbot.core.llm.anthropic_client import (  # pylint: disable=import-outside-toplevel
-            convert_tools_to_anthropic,
-            _supports_temperature,
-        )
-
         await self._connect_mcp()
 
         effective_message = user_message
@@ -358,32 +360,21 @@ class ChatAssistantBase:
 
         history = self._load_history()
         system_prompt = self._get_system_prompt()
-
-        # Anthropic doesn't allow system messages inside the messages list.
-        # Build messages without system, filtering any stored system-role entries.
-        input_messages: list[dict] = [
-            m for m in history if m.get("role") != "system"
-        ]
-
         tools_openai = self._get_tool_definitions()
-        anthropic_tools = convert_tools_to_anthropic(tools_openai)
+
+        # Build provider-specific message list
+        if settings.LLM_PROVIDER == "openai":
+            input_messages: list[dict] = [{"role": "system", "content": system_prompt}] + [
+                m for m in history if m.get("role") != "system"
+            ]
+        else:
+            input_messages = [m for m in history if m.get("role") != "system"]
 
         full_response = ""
         start_time = datetime.now(UTC)
-
         max_tool_rounds = 15
-        for round_idx in range(max_tool_rounds):
-            stream_params: dict = {
-                "model": self._model,
-                "max_tokens": settings.LLM_MAX_TOKENS,
-                "system": system_prompt,
-                "messages": input_messages,
-            }
-            if _supports_temperature(self._model):
-                stream_params["temperature"] = settings.LLM_DEFAULT_TEMPERATURE
-            if anthropic_tools:
-                stream_params["tools"] = anthropic_tools
 
+        for round_idx in range(max_tool_rounds):
             await self._guardrail_service.invoke(
                 HookKind.before_model,
                 model=self._model,
@@ -391,31 +382,111 @@ class ChatAssistantBase:
             )
 
             pending_tool_calls: list[dict] = []
-            final_message_content: list = []
 
-            async with self._client.messages.stream(**stream_params) as stream:
-                async for event in stream:
-                    if (
-                        event.type == "content_block_delta"
-                        and hasattr(event, "delta")
-                        and getattr(event.delta, "type", None) == "text_delta"
-                    ):
-                        chunk = event.delta.text
-                        full_response += chunk
-                        yield f"data: {json.dumps({'type': 'token', 'content': chunk})}\n\n"
+            if settings.LLM_PROVIDER == "openai":
+                # \u2500\u2500 OpenAI streaming path \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+                create_kwargs: dict[str, Any] = {
+                    "model": self._model,
+                    "max_tokens": settings.LLM_MAX_TOKENS,
+                    "messages": input_messages,
+                    "temperature": settings.LLM_DEFAULT_TEMPERATURE,
+                    "stream": True,
+                }
+                if tools_openai:
+                    # Convert flat format to OpenAI nested format
+                    oai_tools = []
+                    for t in tools_openai:
+                        fn: dict = {"name": t["name"], "description": t.get("description", ""), "parameters": t.get("parameters", {})}
+                        if t.get("strict"):
+                            fn["strict"] = True
+                        oai_tools.append({"type": "function", "function": fn})
+                    create_kwargs["tools"] = oai_tools
 
-                final_msg = await stream.get_final_message()
-                final_message_content = list(final_msg.content)
+                tc_accum: dict[int, dict] = {}
+                round_text = ""
+                async for chunk in await self._client.chat.completions.create(**create_kwargs):
+                    delta = chunk.choices[0].delta if chunk.choices else None
+                    if delta is None:
+                        continue
+                    if delta.content:
+                        round_text += delta.content
+                        full_response += delta.content
+                        yield f"data: {json.dumps({'type': 'token', 'content': delta.content})}\n\n"
+                    if delta.tool_calls:
+                        for tc_delta in delta.tool_calls:
+                            idx = tc_delta.index
+                            if idx not in tc_accum:
+                                tc_accum[idx] = {"id": "", "name": "", "args": ""}
+                            if tc_delta.id:
+                                tc_accum[idx]["id"] = tc_delta.id
+                            if tc_delta.function:
+                                if tc_delta.function.name:
+                                    tc_accum[idx]["name"] = tc_delta.function.name
+                                if tc_delta.function.arguments:
+                                    tc_accum[idx]["args"] += tc_delta.function.arguments
 
-                for block in final_message_content:
-                    if block.type == "tool_use":
-                        pending_tool_calls.append(
-                            {
-                                "name": block.name,
-                                "call_id": block.id,
-                                "arguments": block.input,
-                            }
-                        )
+                for idx in sorted(tc_accum):
+                    tc = tc_accum[idx]
+                    try:
+                        arguments = json.loads(tc["args"]) if tc["args"] else {}
+                    except json.JSONDecodeError:
+                        arguments = {}
+                    pending_tool_calls.append({"name": tc["name"], "call_id": tc["id"], "arguments": arguments})
+
+                assistant_turn: dict[str, Any] = {"role": "assistant", "content": round_text or None}
+                if pending_tool_calls:
+                    assistant_turn["tool_calls"] = [
+                        {
+                            "id": tc["call_id"],
+                            "type": "function",
+                            "function": {"name": tc["name"], "arguments": json.dumps(tc["arguments"])},
+                        }
+                        for tc in pending_tool_calls
+                    ]
+
+            else:
+                # \u2500\u2500 Anthropic streaming path \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+                from finbot.core.llm.anthropic_client import (  # pylint: disable=import-outside-toplevel
+                    convert_tools_to_anthropic,
+                    _supports_temperature,
+                )
+                anthropic_tools = convert_tools_to_anthropic(tools_openai)
+                stream_params: dict = {
+                    "model": self._model,
+                    "max_tokens": settings.LLM_MAX_TOKENS,
+                    "system": system_prompt,
+                    "messages": input_messages,
+                }
+                if _supports_temperature(self._model):
+                    stream_params["temperature"] = settings.LLM_DEFAULT_TEMPERATURE
+                if anthropic_tools:
+                    stream_params["tools"] = anthropic_tools
+
+                final_message_content: list = []
+                async with self._client.messages.stream(**stream_params) as stream:
+                    async for event in stream:
+                        if (
+                            event.type == "content_block_delta"
+                            and hasattr(event, "delta")
+                            and getattr(event.delta, "type", None) == "text_delta"
+                        ):
+                            chunk = event.delta.text
+                            full_response += chunk
+                            yield f"data: {json.dumps({'type': 'token', 'content': chunk})}\n\n"
+
+                    final_msg = await stream.get_final_message()
+                    final_message_content = list(final_msg.content)
+
+                    for block in final_message_content:
+                        if block.type == "tool_use":
+                            pending_tool_calls.append(
+                                {"name": block.name, "call_id": block.id, "arguments": block.input}
+                            )
+
+                assistant_turn = {
+                    "role": "assistant",
+                    "content": [_content_block_to_dict(b) for b in final_message_content],
+                }
 
             await self._guardrail_service.invoke(
                 HookKind.after_model,
@@ -427,20 +498,11 @@ class ChatAssistantBase:
             if not pending_tool_calls:
                 break
 
-            # Add the assistant turn (text + tool_use blocks) to messages
-            input_messages.append(
-                {
-                    "role": "assistant",
-                    "content": [
-                        _content_block_to_dict(b) for b in final_message_content
-                    ],
-                }
-            )
+            input_messages.append(assistant_turn)
 
             keepalive_queue: asyncio.Queue[str] = asyncio.Queue()
 
             async def _keepalive_emitter() -> None:
-                """Emit SSE keepalive comments while tools run."""
                 interval = settings.CHAT_KEEPALIVE_INTERVAL
                 while True:
                     await asyncio.sleep(interval)
@@ -450,7 +512,6 @@ class ChatAssistantBase:
             try:
                 yield f"data: {json.dumps({'type': 'status', 'content': 'Thinking\u2026'})}\n\n"
 
-                tool_results: list[dict] = []
                 for tc in pending_tool_calls:
                     yield f"data: {json.dumps({'type': 'status', 'content': self._tool_display_label(tc['name'])})}\n\n"
 
@@ -474,13 +535,6 @@ class ChatAssistantBase:
                     tool_duration_ms = int(
                         (datetime.now(UTC) - tool_start).total_seconds() * 1000
                     )
-                    tool_results.append(
-                        {
-                            "type": "tool_result",
-                            "tool_use_id": tc["call_id"],
-                            "content": result,
-                        }
-                    )
 
                     await event_bus.emit_agent_event(
                         agent_name=self.agent_name,
@@ -497,11 +551,22 @@ class ChatAssistantBase:
                         summary=f"Chat tool completed: {tc['name']} ({tool_duration_ms}ms)",
                     )
 
+                    if settings.LLM_PROVIDER == "openai":
+                        input_messages.append({"role": "tool", "tool_call_id": tc["call_id"], "content": result})
+                    else:
+                        if not isinstance(input_messages[-1], dict) or input_messages[-1].get("role") != "user":
+                            input_messages.append({"role": "user", "content": []})
+                        content = input_messages[-1]["content"]
+                        if isinstance(content, list):
+                            content.append({"type": "tool_result", "tool_use_id": tc["call_id"], "content": result})
+
                     while not keepalive_queue.empty():
                         yield keepalive_queue.get_nowait()
 
-                # Add all tool results as a single user message
-                input_messages.append({"role": "user", "content": tool_results})
+                # For Anthropic, flush accumulated tool results as a single user message
+                if settings.LLM_PROVIDER != "openai":
+                    pass  # already appended inline above
+
             finally:
                 keepalive_task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
